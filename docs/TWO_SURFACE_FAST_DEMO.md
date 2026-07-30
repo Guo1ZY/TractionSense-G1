@@ -3,7 +3,7 @@
 This branch targets the shortest path to one visible real-G1 result:
 
 > With the same forward joystick input, the robot automatically caps itself at
-> `0.20 m/s` on one known slippery floor and at `0.35 m/s` on one known
+> `0.20 m/s` on one known slippery floor and at `0.50 m/s` on one known
 > high-traction floor.
 
 It deliberately solves **binary recognition of the exact two demonstration
@@ -16,7 +16,7 @@ governor converts it into the two speed caps.
 same joystick command
         │
 480-D proprioceptive history ──► p_low ──► hysteresis ──┬─ LOW  → 0.20 m/s
-                                                        └─ HIGH → 0.35 m/s
+                                                        └─ HIGH → 0.50 m/s
 ```
 
 ## 0. Build
@@ -39,8 +39,17 @@ straight test lane and zero lateral/yaw command.
 ```bash
 export G1_REAL_TEST_ACK=YES
 
-./two_surface_fast_demo.sh manual-low  --network <interface> --log
-./two_surface_fast_demo.sh manual-high --network <interface> --log
+# Stage A: conservative 0.20/0.35 m/s
+G1_FAST_DEMO_PROFILE=safe ./two_surface_fast_demo.sh manual-low \
+  --network <interface> --log
+G1_FAST_DEMO_PROFILE=safe ./two_surface_fast_demo.sh manual-high \
+  --network <interface> --log
+
+# Stage B: visibly separated 0.20/0.50 m/s
+G1_FAST_DEMO_PROFILE=clear ./two_surface_fast_demo.sh manual-low \
+  --network <interface> --log
+G1_FAST_DEMO_PROFILE=clear ./two_surface_fast_demo.sh manual-high \
+  --network <interface> --log
 ```
 
 Hold the same forward-stick position in both runs. Do not proceed until both
@@ -83,7 +92,13 @@ numbers are a fit check—not evidence of generalization to unseen materials.
 ## 4. Automatic demonstration
 
 ```bash
-./two_surface_fast_demo.sh auto --network <interface> --log
+# Explicitly repeat the safe automatic trial first.
+G1_FAST_DEMO_PROFILE=safe ./two_surface_fast_demo.sh auto \
+  --network <interface> --log
+
+# Final visible comparison (clear is also the script default).
+G1_FAST_DEMO_PROFILE=clear ./two_surface_fast_demo.sh auto \
+  --network <interface> --log
 ```
 
 AUTO starts conservatively at the LOW cap. While walking, the decision rules
@@ -95,8 +110,8 @@ are:
 - `v_y` and yaw commands remain locked to zero.
 
 Keep one constant forward-stick input and run separate labeled trials on the
-two floors. The terminal and governor CSV should show `LOW`/`0.20` and
-`HIGH`/`0.35`, respectively.
+two floors. In the final `clear` profile, the terminal and governor CSV should
+show `LOW`/`0.20` and `HIGH`/`0.50`, respectively.
 
 ## Tuning order
 
@@ -106,7 +121,8 @@ Only after the default demonstration succeeds:
 2. increase `G1_TRACTION_HIGH_HOLD` if LOW is falsely promoted;
 3. lower the LOW cap before changing the classifier if the slippery trial is
    unstable;
-4. increase the HIGH cap in `0.05 m/s` increments, never in an untethered run.
+4. do not exceed the `0.50 m/s` HIGH cap on this demonstration branch without
+   a separate stability assessment.
 
 The gamepad escape controls remain available:
 

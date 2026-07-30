@@ -5,7 +5,8 @@ sensor-robust distillation.**
 
 > **Branch note — `experiment/two-surface-fast-demo`:** this branch packages
 > the shortest real-G1 path for automatically mapping two pre-recorded physical
-> floors to `0.20/0.35 m/s`. Start with
+> floors to `0.20/0.50 m/s`, with a preliminary `0.20/0.35 m/s` safety
+> profile. Start with
 > [the fast-demo guide](docs/TWO_SURFACE_FAST_DEMO.md).
 
 TractionSense-G1 is a research extension of
@@ -43,8 +44,9 @@ Two deployment tracks are retained:
 1. **Paper pipeline:** privileged Teacher, Hall/proprio history, friction
    estimator and shared dual-foot encoder.
 2. **Sensor-ablation pipeline:** ordinary 480-D G1 proprioceptive history,
-   binary traction-state classification and a `0.20/0.35 m/s` hysteretic
-   speed governor.
+   binary traction-state classification and a hysteretic speed governor
+   (`0.20/0.35 m/s` safe profile; `0.20/0.50 m/s` clear profile on this
+   branch).
 
 ## Representative results
 

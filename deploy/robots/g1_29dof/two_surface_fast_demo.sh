@@ -9,6 +9,25 @@ CLASSIFIER_DIR="${ROBOT_DIR}/config/traction"
 CLASSIFIER="${CLASSIFIER_DIR}/real_classifier.onnx"
 METRICS="${CLASSIFIER_DIR}/real_classifier_metrics.json"
 PYTHON="${G1_PYTHON:-python3}"
+PROFILE="${G1_FAST_DEMO_PROFILE:-clear}"
+
+case "${PROFILE}" in
+  safe)
+    PROFILE_LOW_SPEED="0.20"
+    PROFILE_HIGH_SPEED="0.35"
+    ;;
+  clear)
+    PROFILE_LOW_SPEED="0.20"
+    PROFILE_HIGH_SPEED="0.50"
+    ;;
+  *)
+    echo "[ERROR] G1_FAST_DEMO_PROFILE must be safe or clear."
+    exit 2
+    ;;
+esac
+
+LOW_SPEED="${G1_TRACTION_LOW_SPEED:-${PROFILE_LOW_SPEED}}"
+HIGH_SPEED="${G1_TRACTION_HIGH_SPEED:-${PROFILE_HIGH_SPEED}}"
 
 usage() {
   cat <<'EOF'
@@ -24,11 +43,11 @@ Optional safe/manual checks:
   G1_REAL_TEST_ACK=YES ./two_surface_fast_demo.sh manual-high --network <iface>
 
 The final AUTO trial uses one joystick command and maps the detected floors to:
-  LOW traction  -> 0.20 m/s cap
-  HIGH traction -> 0.35 m/s cap
+  safe  profile: LOW 0.20 m/s, HIGH 0.35 m/s
+  clear profile: LOW 0.20 m/s, HIGH 0.50 m/s (default)
 
-Override with G1_TRACTION_LOW_SPEED and G1_TRACTION_HIGH_SPEED only after the
-guarded 0.20/0.35 m/s trials pass.
+Run G1_FAST_DEMO_PROFILE=safe first. Select clear only after both guarded fixed
+speed trials pass. G1_TRACTION_LOW_SPEED/HIGH_SPEED provide explicit overrides.
 EOF
 }
 
@@ -67,6 +86,8 @@ show_status() {
   echo "=============================================================="
   echo " G1 automatic two-surface fast demo"
   echo " data root   : ${DATA_ROOT}"
+  echo " profile     : ${PROFILE}"
+  echo " low/high    : ${LOW_SPEED} / ${HIGH_SPEED} m/s"
   echo " LOW trials  : ${low_count}"
   echo " HIGH trials : ${high_count}"
   echo " classifier  : ${CLASSIFIER}"
@@ -143,8 +164,8 @@ case "${COMMAND}" in
       exit 2
     fi
     export G1_GOVERNOR_POLICY=sensorless
-    export G1_TRACTION_LOW_SPEED="${G1_TRACTION_LOW_SPEED:-0.20}"
-    export G1_TRACTION_HIGH_SPEED="${G1_TRACTION_HIGH_SPEED:-0.35}"
+    export G1_TRACTION_LOW_SPEED="${LOW_SPEED}"
+    export G1_TRACTION_HIGH_SPEED="${HIGH_SPEED}"
     export G1_TRACTION_P_LOW_ENTER="${G1_TRACTION_P_LOW_ENTER:-0.60}"
     export G1_TRACTION_P_HIGH_ENTER="${G1_TRACTION_P_HIGH_ENTER:-0.40}"
     export G1_TRACTION_LOW_HOLD="${G1_TRACTION_LOW_HOLD:-0.20}"
@@ -156,13 +177,13 @@ case "${COMMAND}" in
 
   manual-low)
     export G1_GOVERNOR_POLICY=sensorless
-    export G1_TRACTION_LOW_SPEED="${G1_TRACTION_LOW_SPEED:-0.20}"
+    export G1_TRACTION_LOW_SPEED="${LOW_SPEED}"
     run "${ROBOT_DIR}/run_two_surface_governor.sh" low "$@"
     ;;
 
   manual-high)
     export G1_GOVERNOR_POLICY=sensorless
-    export G1_TRACTION_HIGH_SPEED="${G1_TRACTION_HIGH_SPEED:-0.35}"
+    export G1_TRACTION_HIGH_SPEED="${HIGH_SPEED}"
     run "${ROBOT_DIR}/run_two_surface_governor.sh" high "$@"
     ;;
 
