@@ -1,0 +1,114 @@
+# Unified foot observation schema (versioned).
+# Python training, ROS bridge, shared-memory IPC, deploy.yaml, and C++ must match.
+schema_version: foot_obs_v2
+policy_step_dt: 0.02
+history_length: 5
+
+# Single-step policy terms in concatenation order (after base proprio).
+# Base proprio (unchanged from 49999): 96 dims
+#   base_ang_vel(3) * scale0.2 | projected_gravity(3) | velocity_commands(3)
+#   joint_pos_rel(29) | joint_vel_rel(29)*0.05 | last_action(29)
+base_policy_dim: 96
+
+terms:
+  - name: foot_contact
+    dim: 2
+    unit: "1"
+    source: "Fn soft contact L,R"
+    actor: true
+    critic: true
+    sim: true
+    real: true
+    scale: 1.0
+    clip: [0.0, 1.0]
+    noise_uniform: 0.05
+    history: 5
+    fail_mode: "zeros + valid=0"
+
+  - name: foot_normal_force
+    dim: 2
+    unit: "scaled N (x0.01)"
+    source: "ContactSensor |Fz| or taxel sum"
+    actor: true
+    critic: true
+    sim: true
+    real: true
+    scale: 0.01
+    clip: [0.0, 5.0]
+    noise_uniform: 0.05
+    history: 5
+    fail_mode: "zeros + valid=0"
+
+  - name: foot_load_ratio
+    dim: 2
+    unit: "1"
+    source: "Fn_i / sum Fn"
+    actor: true
+    critic: true
+    sim: true
+    real: true
+    scale: 1.0
+    clip: [0.0, 1.0]
+    noise_uniform: 0.03
+    history: 5
+    fail_mode: "0.5,0.5 + valid=0"
+
+  - name: foot_sensor_valid
+    dim: 1
+    unit: "1"
+    source: "bridge / DR"
+    actor: true
+    critic: true
+    sim: true
+    real: true
+    scale: 1.0
+    clip: [0.0, 1.0]
+    noise_uniform: 0.0
+    history: 5
+    fail_mode: "0"
+
+  - name: foot_sensor_age
+    dim: 1
+    unit: "norm age"
+    source: "stamp age / 0.25s"
+    actor: true
+    critic: true
+    sim: true
+    real: true
+    scale: 1.0
+    clip: [0.0, 1.0]
+    noise_uniform: 0.0
+    history: 5
+    fail_mode: "1.0"
+
+# Critic-only privileged (not in actor / not in deploy ONNX path)
+critic_extra:
+  - name: foot_friction_ratio
+    dim: 2
+    note: "ρ=Ft/Fn utilization — NOT μ"
+  - name: foot_slip_proxy
+    dim: 2
+    note: "contact-weighted planar foot speed"
+  - name: ground_friction_mu
+    dim: 1
+    note: "true μ from DR buffer"
+
+# Actor foot dim (no history): 2+2+2+1+1 = 8
+# Actor total with history 5: (96+8)*5 = 520
+actor_foot_dim: 8
+actor_total_dim: 520
+
+# Removed from actor vs Foot-Full:
+#   foot_tangent_force — sim shear not reliable on real pressure-only HW; Ft≠μ
+
+ipc:
+  magic: "F0T2"
+  magic_u32: 0x46305432
+  path: "/tmp/g1_foot_rl_obs.bin"
+  fields:
+    - contact[2]
+    - normal_scaled[2]
+    - load_ratio[2]
+    - valid[1]
+    - age_norm[1]
+  note: "F0T1 (legacy 40B contact/normal/tangent) still supported by bridge readers"

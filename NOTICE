@@ -1,0 +1,11 @@
+TractionSense-G1
+Copyright 2026 Guo1ZY
+
+This repository is a derivative of unitreerobotics/unitree_rl_lab and retains
+its Apache License 2.0 license and upstream Git history. The traction-aware
+training tasks, observation schemas, rewards, Teacher–Student pipeline,
+MuJoCo evaluation, foot/Hall bridges, and deployment governors are project
+modifications.
+
+Unitree and G1 are trademarks of their respective owners. This project is an
+independent research repository and is not an official Unitree release.

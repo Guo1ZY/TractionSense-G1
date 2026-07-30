@@ -1,0 +1,166 @@
+joint_ids_map: [0, 6, 12, 1, 7, 13, 2, 8, 14, 3, 9, 15, 22, 4, 10, 16, 23, 5, 11,
+  17, 24, 18, 25, 19, 26, 20, 27, 21, 28]
+step_dt: 0.02
+stiffness: [100.0, 100.0, 100.0, 150.0, 40.0, 40.0, 100.0, 100.0, 100.0, 150.0, 40.0,
+  40.0, 200.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0,
+  40.0, 40.0, 40.0, 40.0]
+damping: [2.0, 2.0, 2.0, 4.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0, 2.0, 5.0, 5.0, 5.0,
+  1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+default_joint_pos: [-0.1, -0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3,
+  0.3, -0.2, -0.2, 0.25, -0.25, 0.0, 0.0, 0.0, 0.0, 0.97, 0.97, 0.15, -0.15, 0.0,
+  0.0, 0.0, 0.0]
+commands:
+  base_velocity:
+    ranges:
+      lin_vel_x: [-0.5, 1.5]
+      lin_vel_y: [0.0, 0.0]
+      ang_vel_z: [0.0, 0.0]
+      heading: null
+actions:
+  JointPositionAction:
+    clip: null
+    joint_names: [.*]
+    scale: [0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+      0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+      0.25, 0.25, 0.25, 0.25]
+    offset: [-0.1, -0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3, 0.3, -0.2,
+      -0.2, 0.25, -0.25, 0.0, 0.0, 0.0, 0.0, 0.97, 0.97, 0.15, -0.15, 0.0, 0.0, 0.0,
+      0.0]
+    joint_ids: null
+observations:
+  base_ang_vel:
+    params: {}
+    clip: null
+    scale: [0.2, 0.2, 0.2]
+    history_length: 5
+  projected_gravity:
+    params: {}
+    clip: null
+    scale: [1.0, 1.0, 1.0]
+    history_length: 5
+  velocity_commands:
+    params: {command_name: base_velocity}
+    clip: null
+    scale: [1.0, 1.0, 1.0]
+    history_length: 5
+  joint_pos_rel:
+    params: {}
+    clip: null
+    scale: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+      1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    history_length: 5
+  joint_vel_rel:
+    params: {}
+    clip: null
+    scale: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
+      0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
+      0.05, 0.05, 0.05, 0.05]
+    history_length: 5
+  last_action:
+    params: {}
+    clip: null
+    scale: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+      1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    history_length: 5
+  foot_contact:
+    params:
+      sensor_cfg:
+        name: contact_forces
+        joint_names: null
+        joint_ids: !!python/object/apply:builtins.slice [null, null, null]
+        fixed_tendon_names: null
+        fixed_tendon_ids: !!python/object/apply:builtins.slice [null, null, null]
+        body_names: [left_ankle_roll_link, right_ankle_roll_link]
+        body_ids: [6, 12]
+        object_collection_names: null
+        object_collection_ids: !!python/object/apply:builtins.slice [null, null, null]
+        preserve_order: false
+      threshold: 5.0
+      soft: true
+      respect_sensor_valid: true
+    clip: [0.0, 1.0]
+    scale: [1.0, 1.0]
+    history_length: 15
+  foot_normal_force:
+    params:
+      sensor_cfg:
+        name: contact_forces
+        joint_names: null
+        joint_ids: !!python/object/apply:builtins.slice [null, null, null]
+        fixed_tendon_names: null
+        fixed_tendon_ids: !!python/object/apply:builtins.slice [null, null, null]
+        body_names: [left_ankle_roll_link, right_ankle_roll_link]
+        body_ids: [6, 12]
+        object_collection_names: null
+        object_collection_ids: !!python/object/apply:builtins.slice [null, null, null]
+        preserve_order: false
+      scale: 0.01
+      respect_sensor_valid: true
+    clip: [0.0, 5.0]
+    scale: [1.0, 1.0]
+    history_length: 15
+  foot_tangent_force:
+    params:
+      sensor_cfg:
+        name: contact_forces
+        joint_names: null
+        joint_ids: !!python/object/apply:builtins.slice [null, null, null]
+        fixed_tendon_names: null
+        fixed_tendon_ids: !!python/object/apply:builtins.slice [null, null, null]
+        body_names: [left_ankle_roll_link, right_ankle_roll_link]
+        body_ids: [6, 12]
+        object_collection_names: null
+        object_collection_ids: !!python/object/apply:builtins.slice [null, null, null]
+        preserve_order: false
+      scale: 0.01
+      respect_sensor_valid: true
+    clip: [0.0, 5.0]
+    scale: [1.0, 1.0]
+    history_length: 15
+  foot_friction_ratio:
+    params:
+      sensor_cfg:
+        name: contact_forces
+        joint_names: null
+        joint_ids: !!python/object/apply:builtins.slice [null, null, null]
+        fixed_tendon_names: null
+        fixed_tendon_ids: !!python/object/apply:builtins.slice [null, null, null]
+        body_names: [left_ankle_roll_link, right_ankle_roll_link]
+        body_ids: [6, 12]
+        object_collection_names: null
+        object_collection_ids: !!python/object/apply:builtins.slice [null, null, null]
+        preserve_order: false
+      eps: 5.0
+      clip_max: 2.0
+      respect_sensor_valid: true
+    clip: [0.0, 2.0]
+    scale: [1.0, 1.0]
+    history_length: 15
+  foot_load_ratio:
+    params:
+      sensor_cfg:
+        name: contact_forces
+        joint_names: null
+        joint_ids: !!python/object/apply:builtins.slice [null, null, null]
+        fixed_tendon_names: null
+        fixed_tendon_ids: !!python/object/apply:builtins.slice [null, null, null]
+        body_names: [left_ankle_roll_link, right_ankle_roll_link]
+        body_ids: [6, 12]
+        object_collection_names: null
+        object_collection_ids: !!python/object/apply:builtins.slice [null, null, null]
+        preserve_order: false
+      eps: 5.0
+      respect_sensor_valid: true
+    clip: [0.0, 1.0]
+    scale: [1.0, 1.0]
+    history_length: 15
+  foot_sensor_valid:
+    params: {default_valid: 1.0}
+    clip: [0.0, 1.0]
+    scale: [1.0]
+    history_length: 5
+  foot_sensor_age:
+    params: {age_scale: 0.25, clip_max: 1.0}
+    clip: [0.0, 1.0]
+    scale: [1.0]
+    history_length: 5

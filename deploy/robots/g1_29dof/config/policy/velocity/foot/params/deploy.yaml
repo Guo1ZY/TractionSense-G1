@@ -1,0 +1,108 @@
+# Deploy config for Straight-Mu foot policy (model_11999).
+# Actor input: 510 = (96 base terms + 6 foot) * history_length 5
+# Foot live values: ROS bridge → /tmp/g1_foot_rl_obs.bin (see scripts/foot_ros_bridge.py)
+joint_ids_map: [0, 6, 12, 1, 7, 13, 2, 8, 14, 3, 9, 15, 22, 4, 10, 16, 23, 5, 11,
+  17, 24, 18, 25, 19, 26, 20, 27, 21, 28]
+step_dt: 0.02
+stiffness: [100.0, 100.0, 100.0, 150.0, 40.0, 40.0, 100.0, 100.0, 100.0, 150.0, 40.0,
+  40.0, 200.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0,
+  40.0, 40.0, 40.0, 40.0]
+damping: [2.0, 2.0, 2.0, 4.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0, 2.0, 5.0, 5.0, 5.0,
+  1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+default_joint_pos: [-0.1, -0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3,
+  0.3, -0.2, -0.2, 0.25, -0.25, 0.0, 0.0, 0.0, 0.0, 0.97, 0.97, 0.15, -0.15, 0.0,
+  0.0, 0.0, 0.0]
+commands:
+  base_velocity:
+    # Keep deployment clamps aligned with Straight-Mu training limits.
+    ranges:
+      lin_vel_x: [-0.5, 1.5]
+      lin_vel_y: [-0.2, 0.2]
+      ang_vel_z: [-0.2, 0.2]
+      heading: null
+    # First real-robot two-surface demonstration. This remains OFF unless
+    # G1_TRACTION_GOVERNOR=1 is exported before starting g1_ctrl.
+    traction_governor:
+      enabled: false
+      mode: manual_low
+      low_speed_limit: 0.15
+      high_speed_limit: 0.35
+      lock_lateral_yaw: true
+      accel_rate: 0.15
+      decel_rate: 0.80
+      # Future 640-D Student input: JSON {"p_low": ...}.
+      probability_low_enter: 0.65
+      probability_high_enter: 0.35
+      low_hold_s: 0.20
+      high_hold_s: 1.00
+      # Optional AUTO input: fresh JSON {"vx": ..., "slip_score": ...}.
+      feedback_timeout_s: 0.25
+      min_detection_command: 0.20
+      warmup_s: 1.00
+      probe_s: 1.50
+      tracking_low_enter: 0.55
+      tracking_high_enter: 0.30
+actions:
+  JointPositionAction:
+    clip: null
+    joint_names: [.*]
+    scale: [0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+      0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+      0.25, 0.25, 0.25, 0.25]
+    offset: [-0.1, -0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3, 0.3, -0.2,
+      -0.2, 0.25, -0.25, 0.0, 0.0, 0.0, 0.0, 0.97, 0.97, 0.15, -0.15, 0.0, 0.0, 0.0,
+      0.0]
+    joint_ids: null
+observations:
+  base_ang_vel:
+    params: {}
+    clip: null
+    scale: [0.2, 0.2, 0.2]
+    history_length: 5
+  projected_gravity:
+    params: {}
+    clip: null
+    scale: [1.0, 1.0, 1.0]
+    history_length: 5
+  # joystick sticks (LocalXBoxJoystick / MuJoCo pad) → velocity_commands
+  # CMD_MODE=keyboard
+  velocity_commands:
+    params: {command_name: base_velocity}
+    clip: null
+    scale: [1.0, 1.0, 1.0]
+    history_length: 5
+  joint_pos_rel:
+    params: {}
+    clip: null
+    scale: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+      1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    history_length: 5
+  joint_vel_rel:
+    params: {}
+    clip: null
+    scale: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
+      0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
+      0.05, 0.05, 0.05, 0.05]
+    history_length: 5
+  last_action:
+    params: {}
+    clip: null
+    scale: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+      1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    history_length: 5
+  # zorn /g1/{left,right}_foot/frame → bridge → these three terms (L,R each)
+  foot_contact:
+    params: {threshold: 5.0, soft: true}
+    clip: [0.0, 1.0]
+    scale: [1.0, 1.0]
+    history_length: 5
+  foot_normal_force:
+    params: {scale: 0.01}
+    clip: [0.0, 5.0]
+    scale: [1.0, 1.0]
+    history_length: 5
+  foot_tangent_force:
+    params: {scale: 0.01}
+    clip: [0.0, 5.0]
+    scale: [1.0, 1.0]
+    history_length: 5

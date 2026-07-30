@@ -1,0 +1,98 @@
+# C++
+**/cmake-build*/
+**/build*/
+**/*.so
+**/*.log*
+
+# Omniverse
+**/*.dmp
+**/.thumbs
+
+# No USD files allowed in the repo
+**/*.usd
+**/*.usda
+**/*.usdc
+**/*.usdz
+
+# Python
+.DS_Store
+**/*.egg-info/
+**/__pycache__/
+**/.pytest_cache/
+**/*.pyc
+**/*.pb
+
+# Docker/Singularity
+**/*.sif
+docker/cluster/exports/
+docker/.container.cfg
+
+# IDE
+**/.idea/
+**/.vscode/
+# Don't ignore the top-level .vscode directory as it is
+# used to configure VS Code settings
+!.vscode
+
+# Outputs
+**/output/*
+**/outputs/*
+**/videos/*
+**/wandb/*
+**/.neptune/*
+docker/artifacts/
+*.tmp
+
+# Doc Outputs
+**/docs/_build/*
+**/generated/*
+
+# Isaac-Sim packman
+_isaac_sim*
+_repo
+_build
+.lastformat
+
+# RL-Games
+**/runs/*
+**/logs/*
+**/recordings/*
+
+# Pre-Trained Checkpoints
+/.pretrained_checkpoints/
+
+# TractionSense-G1 publication artifacts. Only the curated files placed
+# directly in checkpoints/ are versioned; training runs remain local.
+!checkpoints/
+!checkpoints/*.pt
+!checkpoints/*.onnx
+/checkpoints/*
+!/checkpoints/README.md
+!/checkpoints/*.pt
+!/checkpoints/*.onnx
+
+# Teleop Recorded Dataset
+datasets
+
+# Deploy
+*.pt
+*.obj
+*.mtl
+*.STL
+**/env.yaml
+
+# Mimic
+*.npz
+
+# Research outputs and hardware-local calibration
+**/policy_obs.bin
+**/governor.csv
+**/events.out.tfevents.*
+**/config/traction/real_classifier.onnx
+**/config/traction/real_classifier_metrics.json
+**/*.bak*
+/.training_state/
+
+# Re-enable only the curated top-level PT artifacts after the global
+# deployment rule above.
+!/checkpoints/*.pt

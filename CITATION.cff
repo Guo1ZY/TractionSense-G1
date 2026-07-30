@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use TractionSense-G1, please cite this repository and the associated paper."
+title: "TractionSense-G1: Traction-Conditioned Humanoid Locomotion via Privileged Learning and Sensor-Robust Distillation"
+type: software
+authors:
+  - family-names: "Guo"
+    given-names: "Z. Y."
+repository-code: "https://github.com/Guo1ZY/TractionSense-G1"
+license: Apache-2.0
+version: 0.1.0
+date-released: 2026-07-30
