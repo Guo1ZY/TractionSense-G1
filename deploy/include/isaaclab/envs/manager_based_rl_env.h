@@ -371,6 +371,29 @@ private:
             governor_cfg.decel_rate =
                 std::max(0.0f, std::strtof(value, nullptr));
         }
+        if (const char* value =
+                std::getenv("G1_TRACTION_P_LOW_ENTER")) {
+            governor_cfg.probability_low_enter =
+                std::strtof(value, nullptr);
+        }
+        if (const char* value =
+                std::getenv("G1_TRACTION_P_HIGH_ENTER")) {
+            governor_cfg.probability_high_enter =
+                std::strtof(value, nullptr);
+        }
+        if (const char* value = std::getenv("G1_TRACTION_LOW_HOLD")) {
+            governor_cfg.low_hold_s =
+                std::max(0.0f, std::strtof(value, nullptr));
+        }
+        if (const char* value = std::getenv("G1_TRACTION_HIGH_HOLD")) {
+            governor_cfg.high_hold_s =
+                std::max(0.0f, std::strtof(value, nullptr));
+        }
+        if (const char* value =
+                std::getenv("G1_TRACTION_MIN_DETECTION_COMMAND")) {
+            governor_cfg.min_detection_command =
+                std::max(0.0f, std::strtof(value, nullptr));
+        }
         traction_governor.configure(governor_cfg);
 
         if (governor_cfg.enabled) {

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROBOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "${ROBOT_DIR}/../../../.." && pwd)"
+ROOT="$(cd "${ROBOT_DIR}/../../.." && pwd)"
 PYTHON="${G1_PYTHON:-python3}"
 TRAINER="${ROOT}/research_scripts/train_proprio_traction_classifier.py"
 
@@ -25,6 +25,13 @@ if [[ $# -lt 2 ]]; then
   exit 2
 fi
 
+if ! "${PYTHON}" -c "import numpy, torch, onnx" >/dev/null 2>&1; then
+  echo "[ERROR] ${PYTHON} does not provide numpy + torch + onnx."
+  echo "Select the project training interpreter, for example:"
+  echo "  export G1_PYTHON=/path/to/isaaclab/environment/bin/python"
+  exit 2
+fi
+
 STAMP="$(date +%Y%m%d_%H%M%S)"
 OUT_DIR="${G1_CLASSIFIER_OUTPUT_DIR:-${ROOT}/logs/real/traction_classifier/${STAMP}}"
 ARGS=()
@@ -43,7 +50,7 @@ done
   "${ARGS[@]}" \
   --output-dir "${OUT_DIR}" \
   --epochs "${G1_CLASSIFIER_EPOCHS:-80}" \
-  --device "${G1_CLASSIFIER_DEVICE:-cuda:0}"
+  --device "${G1_CLASSIFIER_DEVICE:-auto}"
 
 echo "[MODEL] ${OUT_DIR}/traction_classifier.onnx"
 echo "[NOTE] metrics are in-sample; run a fresh physical floor-switch test."

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROBOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "${ROBOT_DIR}/../../../.." && pwd)"
+ROOT="$(cd "${ROBOT_DIR}/../../.." && pwd)"
 PYTHON="${G1_PYTHON:-python3}"
 CONVERTER="${ROOT}/research_scripts/convert_g1_obs1_to_labeled_npz.py"
 

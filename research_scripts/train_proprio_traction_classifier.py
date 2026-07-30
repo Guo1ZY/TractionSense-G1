@@ -58,7 +58,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--learning-rate", type=float, default=8.0e-4)
     parser.add_argument("--seed", type=int, default=20260730)
-    parser.add_argument("--device", default="cuda:0")
+    parser.add_argument(
+        "--device",
+        default="auto",
+        help="Training device. 'auto' selects CUDA when available, otherwise CPU.",
+    )
     return parser.parse_args()
 
 
@@ -169,7 +173,16 @@ def main() -> int:
     scale[scale < 1.0e-4] = 1.0
     train_normalized = ((train_x - mean) / scale).astype(np.float32)
 
-    device = torch.device(args.device)
+    requested_device = args.device
+    if requested_device == "auto":
+        requested_device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    if requested_device.startswith("cuda") and not torch.cuda.is_available():
+        raise RuntimeError(
+            f"CUDA device {requested_device!r} was requested, but CUDA is unavailable; "
+            "use --device auto or --device cpu"
+        )
+    device = torch.device(requested_device)
+    print(f"device={device}", flush=True)
     model = Classifier().to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=args.learning_rate, weight_decay=2.0e-4

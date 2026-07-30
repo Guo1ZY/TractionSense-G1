@@ -3,6 +3,11 @@
 **Traction-conditioned humanoid locomotion via privileged learning and
 sensor-robust distillation.**
 
+> **Branch note — `experiment/two-surface-fast-demo`:** this branch packages
+> the shortest real-G1 path for automatically mapping two pre-recorded physical
+> floors to `0.20/0.35 m/s`. Start with
+> [the fast-demo guide](docs/TWO_SURFACE_FAST_DEMO.md).
+
 TractionSense-G1 is a research extension of
 [Unitree RL Lab](https://github.com/unitreerobotics/unitree_rl_lab) for the
 Unitree G1 humanoid. It studies a simple behavior objective: under the same

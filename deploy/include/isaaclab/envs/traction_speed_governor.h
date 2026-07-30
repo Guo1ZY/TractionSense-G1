@@ -92,6 +92,19 @@ public:
             cfg_.probability_low_enter,
             cfg_.probability_high_enter,
             1.0f);
+        cfg_.low_hold_s = std::max(0.0f, cfg_.low_hold_s);
+        cfg_.high_hold_s = std::max(0.0f, cfg_.high_hold_s);
+        cfg_.feedback_timeout_s = std::max(0.0f, cfg_.feedback_timeout_s);
+        cfg_.min_detection_command =
+            std::max(0.0f, cfg_.min_detection_command);
+        cfg_.warmup_s = std::max(0.0f, cfg_.warmup_s);
+        cfg_.probe_s = std::max(0.0f, cfg_.probe_s);
+        cfg_.tracking_high_enter =
+            std::clamp(cfg_.tracking_high_enter, 0.0f, 1.5f);
+        cfg_.tracking_low_enter = std::clamp(
+            cfg_.tracking_low_enter,
+            cfg_.tracking_high_enter,
+            1.5f);
         reset();
     }
 
