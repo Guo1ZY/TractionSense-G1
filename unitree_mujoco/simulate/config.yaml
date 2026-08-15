@@ -1,0 +1,17 @@
+robot: "g1"
+robot_scene: "scene_29dof_normal.xml"
+
+domain_id: 0
+interface: "lo"
+
+# FSM A/X/B 来自手柄经 DDS 发给 g1_ctrl。
+# 有 /dev/input/js0 时务必为 1，否则按 X 不会进 Velocity。
+# 无手柄改为 0，并在 g1_ctrl 终端用键盘 a/x/b（已加兜底）。
+use_joystick: 0
+joystick_type: "xbox"
+joystick_device: "/dev/input/js0"
+joystick_bits: 16
+
+print_scene_information: 1
+
+enable_elastic_band: 1

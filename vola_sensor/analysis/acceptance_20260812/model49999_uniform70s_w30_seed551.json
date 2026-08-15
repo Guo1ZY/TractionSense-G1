@@ -1,0 +1,552 @@
+{
+  "format": "uniform-high-friction-long-eval-v1",
+  "status": "FAIL",
+  "task": "Unitree-G1-29dof-Velocity-Foot-TractionMagneticMotionStudent-UniformHighFrictionLongBackbone",
+  "seed": 551,
+  "num_envs": 16,
+  "requested_steps": 3500,
+  "executed_steps": 2731,
+  "step_dt_s": 0.02,
+  "requested_duration_s": 70.0,
+  "metric_warmup_steps": 100,
+  "policy": {
+    "kind": "original_model_49999_proprio_baseline",
+    "checkpoint": "/home/mosense/guo/unitree_rl_lab/model/rl/model_49999.pt",
+    "checkpoint_sha256": "c508af7910a69e2bc06111caaa677d5bea521bfb52fc654d82d38b499e2ae99b",
+    "rsl_rl_cfg_entry_point_override": null,
+    "environment_observation_dimension": 1864,
+    "consumed_observation_dimension": 480,
+    "policy_terms": [
+      "base_ang_vel",
+      "projected_gravity",
+      "velocity_commands",
+      "joint_pos_rel",
+      "joint_vel_rel",
+      "last_action",
+      "foot_magnetic_array",
+      "foot_sample_period_lr",
+      "foot_sensor_valid_lr",
+      "foot_sensor_age_lr"
+    ],
+    "policy_functions": [
+      "base_ang_vel",
+      "projected_gravity",
+      "generated_commands",
+      "joint_pos_rel",
+      "joint_vel_rel",
+      "last_action",
+      "hall_magnetic_array",
+      "hall_sample_period_lr",
+      "hall_sensor_valid_lr",
+      "lateral_motion_feedback"
+    ],
+    "policy_term_dims": [
+      [
+        15
+      ],
+      [
+        15
+      ],
+      [
+        15
+      ],
+      [
+        145
+      ],
+      [
+        145
+      ],
+      [
+        145
+      ],
+      [
+        1350
+      ],
+      [
+        30
+      ],
+      [
+        2
+      ],
+      [
+        2
+      ]
+    ],
+    "policy_history_lengths": [
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      15,
+      15,
+      0,
+      0
+    ],
+    "policy_slices": {
+      "base_ang_vel": [
+        0,
+        15
+      ],
+      "projected_gravity": [
+        15,
+        30
+      ],
+      "velocity_commands": [
+        30,
+        45
+      ],
+      "joint_pos_rel": [
+        45,
+        190
+      ],
+      "joint_vel_rel": [
+        190,
+        335
+      ],
+      "last_action": [
+        335,
+        480
+      ],
+      "foot_magnetic_array": [
+        480,
+        1830
+      ],
+      "foot_sample_period_lr": [
+        1830,
+        1860
+      ],
+      "foot_sensor_valid_lr": [
+        1860,
+        1862
+      ],
+      "foot_sensor_age_lr": [
+        1862,
+        1864
+      ]
+    },
+    "trailing_config_field": "foot_sensor_age_lr",
+    "trailing_feature_mode": "motion_feedback",
+    "trailing_values": [
+      "body_vy_m_s",
+      "relative_heading_rad"
+    ],
+    "runtime_value_max_abs_error": 0.0,
+    "uses_force_contact_mu_slip_or_stage": false,
+    "clip_actions": 100.0,
+    "joint_position_action_scale_rad": 0.25,
+    "external_policy_adapter": null,
+    "high_speed_policy_group": null
+  },
+  "environment": {
+    "profile": "nominal_play",
+    "requested_command_m_s": 0.8,
+    "floor_width_override_m": 30.0,
+    "floor_length_override_m": 64.0,
+    "episode_length_override_s": 70.0,
+    "floor": {
+      "friction_high_start": {
+        "prim_path": "{ENV_REGEX_NS}/FrictionHighStart",
+        "size_m": [
+          8.0,
+          30.0,
+          0.08
+        ],
+        "center_m": [
+          -4.0,
+          0.0,
+          -0.04
+        ],
+        "static_friction": 0.9,
+        "dynamic_friction": 0.9,
+        "friction_combine_mode": "multiply",
+        "opacity": 1.0
+      },
+      "friction_low": {
+        "prim_path": "{ENV_REGEX_NS}/FrictionLow",
+        "size_m": [
+          12.0,
+          30.0,
+          0.08
+        ],
+        "center_m": [
+          6.0,
+          0.0,
+          -0.04
+        ],
+        "static_friction": 0.9,
+        "dynamic_friction": 0.9,
+        "friction_combine_mode": "multiply",
+        "opacity": 1.0
+      },
+      "friction_high_end": {
+        "prim_path": "{ENV_REGEX_NS}/FrictionHighEnd",
+        "size_m": [
+          52.0,
+          30.0,
+          0.08
+        ],
+        "center_m": [
+          38.0,
+          0.0,
+          -0.04
+        ],
+        "static_friction": 0.9,
+        "dynamic_friction": 0.9,
+        "friction_combine_mode": "multiply",
+        "opacity": 1.0
+      }
+    },
+    "effective_mu_min_at_reset": 0.8999999761581421,
+    "effective_mu_max_at_reset": 0.8999999761581421,
+    "has_friction_transition": false,
+    "has_course_success_truncation": false,
+    "has_targeted_pushes": false,
+    "hall": {
+      "enable_domain_randomization": false,
+      "foot_dropout_probability": 0.05,
+      "dead_channel_probability": 0.04,
+      "maximum_packet_delay_steps": 4,
+      "contact_distribution_mode": "detailed"
+    },
+    "command_history_max_abs_error": 0.0
+  },
+  "censoring": "first episode only; first terminal sample and every managed-reset sample are excluded from subsequent motion metrics",
+  "aggregate": {
+    "fall_event_count": 16,
+    "unique_env_first_fall_count": 16,
+    "timeout_count": 0,
+    "survival_fraction": 0.0,
+    "earliest_first_fall_s": 37.2,
+    "mean_survival_s": 46.72624969482422,
+    "mean_body_vx_m_s": 0.7984679937362671,
+    "minimum_per_env_mean_vx_m_s": 0.7911977171897888,
+    "p05_per_env_mean_vx_m_s": 0.792935699224472,
+    "mean_body_vy_m_s": -0.042129892855882645,
+    "mean_final_cross_track_m": -15.42951774597168,
+    "maximum_abs_final_cross_track_m": 15.672510147094727,
+    "heading_rms_rad": 0.4493359327316284,
+    "body_vy_rms_m_s": 0.10995189845561981,
+    "angular_velocity_rms_rad_s": 0.4591846168041229,
+    "tilt_rms": 0.05866556242108345,
+    "action_slew_rms": 0.8537158966064453,
+    "action_saturation_fraction": 0.0042875770130362005,
+    "hall_both_valid_fraction": 1.0,
+    "mean_progress_m": 32.774314880371094,
+    "minimum_progress_m": 24.284643173217773,
+    "maximum_abs_cross_track_m": 15.672510147094727,
+    "p95_abs_cross_track_m": 15.64111042022705,
+    "nan_detected": false,
+    "nan_component": null
+  },
+  "gate_thresholds": {
+    "minimum_mean_vx_m_s": 0.69,
+    "minimum_per_env_mean_vx_m_s": 0.65,
+    "maximum_heading_rms_rad": 0.25,
+    "maximum_body_vy_rms_m_s": 0.25,
+    "maximum_angular_velocity_rms_rad_s": 1.5,
+    "maximum_action_saturation_fraction": 0.05
+  },
+  "gates": {
+    "zero_falls": false,
+    "finite_rollout": true,
+    "mean_vx": true,
+    "every_env_vx": true,
+    "heading_rms": false,
+    "body_vy_rms": true,
+    "angular_velocity_rms": true,
+    "action_saturation": true,
+    "pass": false
+  },
+  "per_env": [
+    {
+      "env_id": 0,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 45.88,
+      "survival_s": 45.87999725341797,
+      "mean_vx_m_s": 0.7989840507507324,
+      "body_vy_rms_m_s": 0.10373223572969437,
+      "heading_rms_rad": 0.3876711428165436,
+      "angular_velocity_rms_rad_s": 0.45114415884017944,
+      "tilt_rms": 0.05931536480784416,
+      "action_slew_rms": 0.8131958842277527,
+      "action_saturation_fraction": 0.004054945893585682,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 32.50386428833008,
+      "max_abs_cross_track_m": 15.268415451049805,
+      "first_fall_cross_track_m": -15.268415451049805
+    },
+    {
+      "env_id": 1,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 50.72,
+      "survival_s": 50.71999740600586,
+      "mean_vx_m_s": 0.7961542010307312,
+      "body_vy_rms_m_s": 0.1174345389008522,
+      "heading_rms_rad": 0.42367318272590637,
+      "angular_velocity_rms_rad_s": 0.4475603699684143,
+      "tilt_rms": 0.05895741656422615,
+      "action_slew_rms": 0.8940580487251282,
+      "action_saturation_fraction": 0.004430666565895081,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 36.13404846191406,
+      "max_abs_cross_track_m": 15.53207778930664,
+      "first_fall_cross_track_m": -15.53207778930664
+    },
+    {
+      "env_id": 2,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 52.36,
+      "survival_s": 52.36000061035156,
+      "mean_vx_m_s": 0.7911977171897888,
+      "body_vy_rms_m_s": 0.1030200645327568,
+      "heading_rms_rad": 0.4156827926635742,
+      "angular_velocity_rms_rad_s": 0.5035762190818787,
+      "tilt_rms": 0.06060471758246422,
+      "action_slew_rms": 0.8603088855743408,
+      "action_saturation_fraction": 0.0043685464188456535,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 37.26297378540039,
+      "max_abs_cross_track_m": 15.413158416748047,
+      "first_fall_cross_track_m": -15.405942916870117
+    },
+    {
+      "env_id": 3,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 40.74,
+      "survival_s": 40.73999786376953,
+      "mean_vx_m_s": 0.7973482608795166,
+      "body_vy_rms_m_s": 0.11049457639455795,
+      "heading_rms_rad": 0.5362787842750549,
+      "angular_velocity_rms_rad_s": 0.46775954961776733,
+      "tilt_rms": 0.05980563536286354,
+      "action_slew_rms": 0.8721882104873657,
+      "action_saturation_fraction": 0.004895590245723724,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 27.303680419921875,
+      "max_abs_cross_track_m": 15.329863548278809,
+      "first_fall_cross_track_m": -15.329863548278809
+    },
+    {
+      "env_id": 4,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 37.2,
+      "survival_s": 37.20000076293945,
+      "mean_vx_m_s": 0.7977597117424011,
+      "body_vy_rms_m_s": 0.08344651013612747,
+      "heading_rms_rad": 0.5059350728988647,
+      "angular_velocity_rms_rad_s": 0.356696218252182,
+      "tilt_rms": 0.05321719869971275,
+      "action_slew_rms": 0.7344681620597839,
+      "action_saturation_fraction": 0.0031739810947328806,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 24.284643173217773,
+      "max_abs_cross_track_m": 15.338020324707031,
+      "first_fall_cross_track_m": -15.338020324707031
+    },
+    {
+      "env_id": 5,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 46.0,
+      "survival_s": 46.0,
+      "mean_vx_m_s": 0.8000675439834595,
+      "body_vy_rms_m_s": 0.12188903242349625,
+      "heading_rms_rad": 0.4198993146419525,
+      "angular_velocity_rms_rad_s": 0.47510936856269836,
+      "tilt_rms": 0.060836054384708405,
+      "action_slew_rms": 0.8773563504219055,
+      "action_saturation_fraction": 0.005062696058303118,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 32.346195220947266,
+      "max_abs_cross_track_m": 15.399843215942383,
+      "first_fall_cross_track_m": -15.399843215942383
+    },
+    {
+      "env_id": 6,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 53.58,
+      "survival_s": 53.57999801635742,
+      "mean_vx_m_s": 0.8049781322479248,
+      "body_vy_rms_m_s": 0.10912177711725235,
+      "heading_rms_rad": 0.4445057511329651,
+      "angular_velocity_rms_rad_s": 0.3744059205055237,
+      "tilt_rms": 0.05466899275779724,
+      "action_slew_rms": 0.8040295839309692,
+      "action_saturation_fraction": 0.003944324795156717,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 38.89577865600586,
+      "max_abs_cross_track_m": 15.630643844604492,
+      "first_fall_cross_track_m": -15.630643844604492
+    },
+    {
+      "env_id": 7,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 44.7,
+      "survival_s": 44.70000076293945,
+      "mean_vx_m_s": 0.7991945743560791,
+      "body_vy_rms_m_s": 0.12280245125293732,
+      "heading_rms_rad": 0.5037856698036194,
+      "angular_velocity_rms_rad_s": 0.4913068413734436,
+      "tilt_rms": 0.0592670664191246,
+      "action_slew_rms": 0.9192532896995544,
+      "action_saturation_fraction": 0.004570782650262117,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 30.960412979125977,
+      "max_abs_cross_track_m": 15.55688190460205,
+      "first_fall_cross_track_m": -15.55688190460205
+    },
+    {
+      "env_id": 8,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 41.300000000000004,
+      "survival_s": 41.29999923706055,
+      "mean_vx_m_s": 0.8001723289489746,
+      "body_vy_rms_m_s": 0.11071717739105225,
+      "heading_rms_rad": 0.39624103903770447,
+      "angular_velocity_rms_rad_s": 0.5142990350723267,
+      "tilt_rms": 0.061146050691604614,
+      "action_slew_rms": 0.9197773933410645,
+      "action_saturation_fraction": 0.004527507349848747,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 28.443279266357422,
+      "max_abs_cross_track_m": 15.463356018066406,
+      "first_fall_cross_track_m": -15.463356018066406
+    },
+    {
+      "env_id": 9,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 46.1,
+      "survival_s": 46.099998474121094,
+      "mean_vx_m_s": 0.7963106632232666,
+      "body_vy_rms_m_s": 0.10589618980884552,
+      "heading_rms_rad": 0.5125885605812073,
+      "angular_velocity_rms_rad_s": 0.5592409372329712,
+      "tilt_rms": 0.060304008424282074,
+      "action_slew_rms": 0.9174836277961731,
+      "action_saturation_fraction": 0.004347485955804586,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 32.13398742675781,
+      "max_abs_cross_track_m": 15.387918472290039,
+      "first_fall_cross_track_m": -15.387918472290039
+    },
+    {
+      "env_id": 10,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 54.620000000000005,
+      "survival_s": 54.619998931884766,
+      "mean_vx_m_s": 0.7979235649108887,
+      "body_vy_rms_m_s": 0.12048806995153427,
+      "heading_rms_rad": 0.4543735384941101,
+      "angular_velocity_rms_rad_s": 0.4675253629684448,
+      "tilt_rms": 0.06010359525680542,
+      "action_slew_rms": 0.8512895703315735,
+      "action_saturation_fraction": 0.0045610032975673676,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 39.2636833190918,
+      "max_abs_cross_track_m": 15.411906242370605,
+      "first_fall_cross_track_m": -15.411906242370605
+    },
+    {
+      "env_id": 11,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 48.58,
+      "survival_s": 48.57999801635742,
+      "mean_vx_m_s": 0.7935150265693665,
+      "body_vy_rms_m_s": 0.10521195828914642,
+      "heading_rms_rad": 0.42306938767433167,
+      "angular_velocity_rms_rad_s": 0.41342484951019287,
+      "tilt_rms": 0.0581861287355423,
+      "action_slew_rms": 0.7861596345901489,
+      "action_saturation_fraction": 0.0037754846271127462,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 34.218177795410156,
+      "max_abs_cross_track_m": 15.32270622253418,
+      "first_fall_cross_track_m": -15.32270622253418
+    },
+    {
+      "env_id": 12,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 47.78,
+      "survival_s": 47.779998779296875,
+      "mean_vx_m_s": 0.798479437828064,
+      "body_vy_rms_m_s": 0.10990530997514725,
+      "heading_rms_rad": 0.41223159432411194,
+      "angular_velocity_rms_rad_s": 0.5062592029571533,
+      "tilt_rms": 0.0600273460149765,
+      "action_slew_rms": 0.8877412676811218,
+      "action_saturation_fraction": 0.0045645590871572495,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 33.664344787597656,
+      "max_abs_cross_track_m": 15.328924179077148,
+      "first_fall_cross_track_m": -15.328924179077148
+    },
+    {
+      "env_id": 13,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 45.02,
+      "survival_s": 45.02000045776367,
+      "mean_vx_m_s": 0.8005321025848389,
+      "body_vy_rms_m_s": 0.10691975057125092,
+      "heading_rms_rad": 0.505394697189331,
+      "angular_velocity_rms_rad_s": 0.45828115940093994,
+      "tilt_rms": 0.05867846682667732,
+      "action_slew_rms": 0.8695575594902039,
+      "action_saturation_fraction": 0.004360441584140062,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 31.34378433227539,
+      "max_abs_cross_track_m": 15.460983276367188,
+      "first_fall_cross_track_m": -15.460983276367188
+    },
+    {
+      "env_id": 14,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 44.14,
+      "survival_s": 44.13999938964844,
+      "mean_vx_m_s": 0.7985138297080994,
+      "body_vy_rms_m_s": 0.10145889222621918,
+      "heading_rms_rad": 0.38482335209846497,
+      "angular_velocity_rms_rad_s": 0.44147342443466187,
+      "tilt_rms": 0.057265691459178925,
+      "action_slew_rms": 0.8272303938865662,
+      "action_saturation_fraction": 0.0038950624875724316,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 30.670827865600586,
+      "max_abs_cross_track_m": 15.362282752990723,
+      "first_fall_cross_track_m": -15.362282752990723
+    },
+    {
+      "env_id": 15,
+      "fall": true,
+      "timeout": false,
+      "first_fall_s": 48.9,
+      "survival_s": 48.89999771118164,
+      "mean_vx_m_s": 0.8043567538261414,
+      "body_vy_rms_m_s": 0.1199369952082634,
+      "heading_rms_rad": 0.421845406293869,
+      "angular_velocity_rms_rad_s": 0.3672640025615692,
+      "tilt_rms": 0.05557670816779137,
+      "action_slew_rms": 0.8000632524490356,
+      "action_saturation_fraction": 0.003955591470003128,
+      "hall_both_valid_fraction": 1.0,
+      "progress_m": 34.959381103515625,
+      "max_abs_cross_track_m": 15.672510147094727,
+      "first_fall_cross_track_m": -15.672510147094727
+    }
+  ]
+}

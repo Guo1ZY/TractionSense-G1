@@ -1,0 +1,59 @@
+{
+  "policy": {
+    "kind": "original_model_49999_proprio_baseline",
+    "path": "/home/mosense/guo/unitree_rl_lab/logs/rsl_rl/unitree_g1_29dof_velocity_foot_traction_proprio480_spatial_cadence_stride_transition_retention_r5/2026-08-14_16-16-42/model_1424.pt",
+    "consumed_observation_dimension": 480,
+    "environment_observation_dimension": 1864
+  },
+  "course": {
+    "task": "Unitree-G1-29dof-Velocity-Foot-TractionMagneticMotionStudent-SpatialFrictionCadenceStrideLongDemo",
+    "low_patch_mu": 0.2,
+    "high_patch_mu": 0.9,
+    "floor_width_m": 30.0,
+    "success_min_local_x_m": 17.5,
+    "episode_length_s": 65.0
+  },
+  "run": {
+    "seed": 450,
+    "num_envs": 16,
+    "requested_steps": 3500,
+    "executed_steps": 1749,
+    "policy_dt_s": 0.02,
+    "metric_warmup_steps": 100
+  },
+  "aggregate": {
+    "fall_event_count": 0,
+    "unique_env_first_fall_count": 0,
+    "completion_count": 0,
+    "timeout_count": 16,
+    "survival_fraction": 1.0,
+    "earliest_first_fall_s": null,
+    "mean_survival_s": 31.783748626708984,
+    "metric_valid_envs": 16,
+    "mean_body_vx_m_s": 0.7464154958724976,
+    "minimum_per_env_mean_vx_m_s": 0.7013087868690491,
+    "low_mean_body_vx_m_s": 0.7447084784507751,
+    "high_end_mean_body_vx_m_s": 0.7470120787620544,
+    "mean_body_vy_m_s": 0.0021612062118947506,
+    "body_vy_rms_m_s": 0.07351942360401154,
+    "heading_rms_rad": 0.32241320610046387,
+    "low_heading_rms_rad": 0.19548797607421875,
+    "high_end_heading_rms_rad": 0.41107794642448425,
+    "post_low_heading_residual_rms_rad": 0.3298027217388153,
+    "angular_velocity_rms_rad_s": 0.4709046483039856,
+    "low_angular_velocity_rms_rad_s": 0.482593297958374,
+    "tilt_rms": 0.06271166354417801,
+    "action_slew_rms": 0.7279866337776184,
+    "action_saturation_fraction": 0.011176830689032871,
+    "mean_progress_m": 22.795888900756836,
+    "maximum_progress_m": 40.76723098754883,
+    "minimum_progress_m": 4.6584672927856445,
+    "mean_final_cross_track_m": -1.350451946258545,
+    "maximum_abs_final_cross_track_m": 8.529255867004395,
+    "p95_abs_max_cross_track_m": 8.135224342346191,
+    "maximum_abs_cross_track_m": 8.529255867004395,
+    "nan_detected": false,
+    "nan_component": null,
+    "executed_steps": 1749
+  }
+}

@@ -96,3 +96,12 @@ datasets
 # Re-enable only the curated top-level PT artifacts after the global
 # deployment rule above.
 !/checkpoints/*.pt
+
+# IDE and editor-local files
+.vscode/
+.idea/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.ipynb_checkpoints/

@@ -1,0 +1,95 @@
+{
+  "policy": {
+    "kind": "plain_480d_proprio_actor",
+    "path": "/home/mosense/guo/unitree_rl_lab/model/rl/model_49999.pt",
+    "consumed_observation_dimension": 480,
+    "environment_observation_dimension": 1864
+  },
+  "mode": "time_hlh",
+  "segments": [
+    {
+      "index": 0,
+      "step_bounds": [
+        0,
+        300
+      ],
+      "mu": 0.8,
+      "exposure_s": 64.00000000000004,
+      "mean_vx_m_s": 0.30378901958465576,
+      "vy_rms_m_s": 0.09962733089923859,
+      "heading_rms_rad": 0.07103519886732101,
+      "omega_rms_rad_s": 0.47259145975112915,
+      "tilt_rms": 0.06994347274303436,
+      "mean_slip_m_s": 0.01394435204565525,
+      "step_frequency_hz": 2.2499999999999987,
+      "mean_stride_length_m": 0.2650581385408129,
+      "mean_step_length_m": 0.13252906927040645
+    },
+    {
+      "index": 1,
+      "step_bounds": [
+        300,
+        800
+      ],
+      "mu": 0.1,
+      "exposure_s": 32.84000000000007,
+      "mean_vx_m_s": 0.23827341198921204,
+      "vy_rms_m_s": 0.29152506589889526,
+      "heading_rms_rad": 0.34726205468177795,
+      "omega_rms_rad_s": 4.300736427307129,
+      "tilt_rms": 0.18590569496154785,
+      "mean_slip_m_s": 0.5592769384384155,
+      "step_frequency_hz": 4.415347137637019,
+      "mean_stride_length_m": 0.08783364295959473,
+      "mean_step_length_m": 0.04391682147979736
+    },
+    {
+      "index": 2,
+      "step_bounds": [
+        800,
+        1200
+      ],
+      "mu": 0.8,
+      "exposure_s": 0.0,
+      "mean_vx_m_s": 0.0,
+      "vy_rms_m_s": 0.0,
+      "heading_rms_rad": 0.0,
+      "omega_rms_rad_s": 0.0,
+      "tilt_rms": 0.0,
+      "mean_slip_m_s": null,
+      "step_frequency_hz": NaN,
+      "mean_stride_length_m": NaN,
+      "mean_step_length_m": null
+    }
+  ],
+  "course": {
+    "task": "Unitree-G1-29dof-Velocity-Foot-TractionMagneticMotionStudent-SpatialFrictionCadenceStrideLongDemo",
+    "command_vx_m_s": 0.3,
+    "floor_width_m": 30.0,
+    "success_min_local_x_m": 17.5,
+    "policy_dt_s": 0.02,
+    "episode_length_s": 65.0,
+    "mu_application": "robot_rigid_material_mu * static_patch_1.0 (multiply combine)"
+  },
+  "run": {
+    "seed": 452,
+    "num_envs": 16,
+    "steps": 1200,
+    "metric_warmup_steps": 100
+  },
+  "aggregate": {
+    "fall_event_count": 31,
+    "unique_env_first_fall_count": 16,
+    "survival_completion_count": 0,
+    "course_success_count": 0,
+    "timeout_count": 0,
+    "mean_body_vx_m_s": 0.282740980386734,
+    "minimum_per_env_mean_vx_m_s": 0.23048365116119385,
+    "body_vy_rms_m_s": 0.1862965226173401,
+    "heading_rms_rad": 0.21286240220069885,
+    "angular_velocity_rms_rad_s": 2.438800573348999,
+    "tilt_rms": 0.11977534741163254,
+    "earliest_first_fall_s": 7.08,
+    "mean_first_fall_s": 8.0525
+  }
+}

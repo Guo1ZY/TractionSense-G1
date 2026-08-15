@@ -1,0 +1,59 @@
+{
+  "policy": {
+    "kind": "original_model_49999_proprio_baseline",
+    "path": "/home/mosense/guo/unitree_rl_lab/model/rl/model_49999.pt",
+    "consumed_observation_dimension": 480,
+    "environment_observation_dimension": 1864
+  },
+  "course": {
+    "task": "Unitree-G1-29dof-Velocity-Foot-TractionMagneticMotionStudent-SpatialFrictionCadenceStrideLongDemo",
+    "low_patch_mu": 0.1,
+    "high_patch_mu": 0.9,
+    "floor_width_m": 30.0,
+    "success_min_local_x_m": 17.5,
+    "episode_length_s": 65.0
+  },
+  "run": {
+    "seed": 451,
+    "num_envs": 16,
+    "requested_steps": 3500,
+    "executed_steps": 451,
+    "policy_dt_s": 0.02,
+    "metric_warmup_steps": 100
+  },
+  "aggregate": {
+    "fall_event_count": 16,
+    "unique_env_first_fall_count": 16,
+    "completion_count": 0,
+    "timeout_count": 0,
+    "survival_fraction": 0.0,
+    "earliest_first_fall_s": 7.34,
+    "mean_survival_s": 7.847499847412109,
+    "metric_valid_envs": 16,
+    "mean_body_vx_m_s": 0.8056659698486328,
+    "minimum_per_env_mean_vx_m_s": 0.7426738142967224,
+    "low_mean_body_vx_m_s": 0.7130066752433777,
+    "high_end_mean_body_vx_m_s": null,
+    "mean_body_vy_m_s": -0.025667797774076462,
+    "body_vy_rms_m_s": 0.1900355964899063,
+    "heading_rms_rad": 0.2825605273246765,
+    "low_heading_rms_rad": 0.5115674138069153,
+    "high_end_heading_rms_rad": null,
+    "post_low_heading_residual_rms_rad": null,
+    "angular_velocity_rms_rad_s": 2.179456949234009,
+    "low_angular_velocity_rms_rad_s": 4.544256687164307,
+    "tilt_rms": 0.11419077962636948,
+    "action_slew_rms": 2.702507972717285,
+    "action_saturation_fraction": 0.02462738276009494,
+    "mean_progress_m": 6.0502519607543945,
+    "maximum_progress_m": 24.10712432861328,
+    "minimum_progress_m": -12.27528190612793,
+    "mean_final_cross_track_m": 0.21829667687416077,
+    "maximum_abs_final_cross_track_m": 3.100830078125,
+    "p95_abs_max_cross_track_m": 1.4964699745178223,
+    "maximum_abs_cross_track_m": 3.1302413940429688,
+    "nan_detected": false,
+    "nan_component": null,
+    "executed_steps": 451
+  }
+}

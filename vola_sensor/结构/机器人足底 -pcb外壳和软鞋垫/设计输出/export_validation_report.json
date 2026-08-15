@@ -1,0 +1,83 @@
+{
+  "assembly_file": "/home/mosense/guo_1/vola_sensor/结构/机器人足底 -pcb外壳和软鞋垫/设计输出/G1足底传感器_快拆连接件_装配.FCStd",
+  "parts": {
+    "01_传感器载板_卡扣+燕尾.step": {
+      "format": "STEP",
+      "valid": true,
+      "solids": 1,
+      "shells": 1,
+      "volume_mm3": 58830.402
+    },
+    "02_G1脚套_燕尾槽+防脱边.step": {
+      "format": "STEP",
+      "valid": true,
+      "solids": 1,
+      "shells": 1,
+      "volume_mm3": 72083.952
+    },
+    "03_快拆定位销_直径5mm.step": {
+      "format": "STEP",
+      "valid": true,
+      "solids": 1,
+      "shells": 1,
+      "volume_mm3": 275.769
+    },
+    "04_脚后跟防脱销_直径5mm.step": {
+      "format": "STEP",
+      "valid": true,
+      "solids": 1,
+      "shells": 1,
+      "volume_mm3": 1732.58
+    },
+    "01_传感器载板_卡扣+燕尾.stl": {
+      "format": "STL",
+      "facets": 2304,
+      "solid": true,
+      "components": 1,
+      "has_non_manifolds": false,
+      "has_non_uniform_facets": false,
+      "duplicated_facets": null,
+      "degenerated_facets": null,
+      "non_uniform_facets": 0
+    },
+    "02_G1脚套_燕尾槽+防脱边.stl": {
+      "format": "STL",
+      "facets": 880,
+      "solid": true,
+      "components": 1,
+      "has_non_manifolds": false,
+      "has_non_uniform_facets": false,
+      "duplicated_facets": null,
+      "degenerated_facets": null,
+      "non_uniform_facets": 0
+    },
+    "03_快拆定位销_直径5mm.stl": {
+      "format": "STL",
+      "facets": 284,
+      "solid": true,
+      "components": 1,
+      "has_non_manifolds": false,
+      "has_non_uniform_facets": false,
+      "duplicated_facets": null,
+      "degenerated_facets": null,
+      "non_uniform_facets": 0
+    },
+    "04_脚后跟防脱销_直径5mm.stl": {
+      "format": "STL",
+      "facets": 284,
+      "solid": true,
+      "components": 1,
+      "has_non_manifolds": false,
+      "has_non_uniform_facets": false,
+      "duplicated_facets": null,
+      "degenerated_facets": null,
+      "non_uniform_facets": 0
+    }
+  },
+  "assembled_interference_mm3": {
+    "carrier_vs_foot_shoe": 0.0,
+    "quick_pin_vs_carrier_and_shoe": 0.0,
+    "heel_pin_vs_foot_shoe": 0.0
+  },
+  "pass": true
+}

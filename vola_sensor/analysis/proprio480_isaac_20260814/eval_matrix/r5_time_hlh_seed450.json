@@ -1,0 +1,96 @@
+{
+  "policy": {
+    "kind": "rsl_rl_fastbase_1864",
+    "path": "/home/mosense/guo/unitree_rl_lab/logs/rsl_rl/unitree_g1_29dof_velocity_foot_traction_hall_spatial_cadence_stride_transition_retention_r5/2026-08-13_21-49-48_transition_retention_r5_seed761/model_399.pt",
+    "runner_cfg": "unitree_rl_lab.tasks.locomotion.agents.rsl_rl_ppo_cfg:FootTractionHallSpatialCadenceStrideTransitionRetentionR5PPORunnerCfg",
+    "consumed_observation_dimension": 1864,
+    "environment_observation_dimension": 1864
+  },
+  "mode": "time_hlh",
+  "segments": [
+    {
+      "index": 0,
+      "step_bounds": [
+        0,
+        300
+      ],
+      "mu": 0.8,
+      "exposure_s": 64.00000000000004,
+      "mean_vx_m_s": 0.3521757125854492,
+      "vy_rms_m_s": 0.10826760530471802,
+      "heading_rms_rad": 0.06733165681362152,
+      "omega_rms_rad_s": 0.3390597105026245,
+      "tilt_rms": 0.05326208099722862,
+      "mean_slip_m_s": 0.00677128043025732,
+      "step_frequency_hz": 2.3437499999999982,
+      "mean_stride_length_m": 0.292382426181082,
+      "mean_step_length_m": 0.146191213090541
+    },
+    {
+      "index": 1,
+      "step_bounds": [
+        300,
+        800
+      ],
+      "mu": 0.1,
+      "exposure_s": 159.999999999998,
+      "mean_vx_m_s": 0.22351489961147308,
+      "vy_rms_m_s": 0.07742347568273544,
+      "heading_rms_rad": 0.469091534614563,
+      "omega_rms_rad_s": 0.4170492887496948,
+      "tilt_rms": 0.056257426738739014,
+      "mean_slip_m_s": 0.04260026291012764,
+      "step_frequency_hz": 2.918750000000036,
+      "mean_stride_length_m": 0.14445195472103425,
+      "mean_step_length_m": 0.07222597736051713
+    },
+    {
+      "index": 2,
+      "step_bounds": [
+        800,
+        1200
+      ],
+      "mu": 0.8,
+      "exposure_s": 127.99999999999868,
+      "mean_vx_m_s": 0.35352009534835815,
+      "vy_rms_m_s": 0.11112692952156067,
+      "heading_rms_rad": 0.6532887816429138,
+      "omega_rms_rad_s": 0.36202162504196167,
+      "tilt_rms": 0.05487901344895363,
+      "mean_slip_m_s": 0.009267130866646767,
+      "step_frequency_hz": 2.3750000000000244,
+      "mean_stride_length_m": 0.21062988919370315,
+      "mean_step_length_m": 0.10531494459685158
+    }
+  ],
+  "course": {
+    "task": "Unitree-G1-29dof-Velocity-Foot-TractionMagneticMotionStudent-SpatialFrictionCadenceStrideLongDemo",
+    "command_vx_m_s": 0.3,
+    "floor_width_m": 30.0,
+    "success_min_local_x_m": 17.5,
+    "policy_dt_s": 0.02,
+    "episode_length_s": 65.0,
+    "mu_application": "robot_rigid_material_mu * static_patch_1.0 (multiply combine)"
+  },
+  "run": {
+    "seed": 450,
+    "num_envs": 16,
+    "steps": 1200,
+    "metric_warmup_steps": 100
+  },
+  "aggregate": {
+    "fall_event_count": 0,
+    "unique_env_first_fall_count": 0,
+    "survival_completion_count": 16,
+    "course_success_count": 0,
+    "timeout_count": 0,
+    "mean_body_vx_m_s": 0.29418236017227173,
+    "minimum_per_env_mean_vx_m_s": 0.2641517221927643,
+    "body_vy_rms_m_s": 0.09730397909879684,
+    "heading_rms_rad": 0.5088919401168823,
+    "angular_velocity_rms_rad_s": 0.38462597131729126,
+    "tilt_rms": 0.05536497384309769,
+    "earliest_first_fall_s": null,
+    "mean_first_fall_s": null
+  }
+}

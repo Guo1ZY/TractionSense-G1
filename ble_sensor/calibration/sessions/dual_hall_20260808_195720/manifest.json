@@ -1,0 +1,118 @@
+{
+  "format": "g1-dual-foot-hall-dataset-v1",
+  "measurement_boundary": "raw Hall Bx/By/Bz counts and temperature only; no force conversion",
+  "created_utc": "2026-08-08T11:57:20.431754+00:00",
+  "config": "/home/mosense/guo_1/ble_sensor/config.magnetic.json",
+  "config_sha256": "72a0a02bd8beff4c92176fa44a7bdbce6886b1b1d98614547e6d907ec0d0c32f",
+  "identity": {
+    "left": {
+      "device_name": "left",
+      "address": "98:A3:16:A1:BF:CA"
+    },
+    "right": {
+      "device_name": "right",
+      "address": "98:A3:16:A1:C1:2E"
+    }
+  },
+  "operator_note": "",
+  "dry_run": true,
+  "phases": [
+    {
+      "key": "baseline_unloaded",
+      "group": "baseline",
+      "duration_s": 12.0,
+      "instruction": "双脚悬空且 TPU 完全卸载，保持静止",
+      "status": "dry_run",
+      "csv": "baseline_unloaded.csv"
+    },
+    {
+      "key": "temperature_drift",
+      "group": "baseline",
+      "duration_s": 12.0,
+      "instruction": "双脚继续卸载，覆盖正常电子温升",
+      "status": "dry_run",
+      "csv": "temperature_drift.csv"
+    },
+    {
+      "key": "forefoot_normal",
+      "group": "motion",
+      "duration_s": 8.0,
+      "instruction": "依次按压前掌区域并完全卸载，记录多次循环",
+      "status": "dry_run",
+      "csv": "forefoot_normal.csv"
+    },
+    {
+      "key": "midfoot_normal",
+      "group": "motion",
+      "duration_s": 8.0,
+      "instruction": "依次按压中足区域并完全卸载，记录多次循环",
+      "status": "dry_run",
+      "csv": "midfoot_normal.csv"
+    },
+    {
+      "key": "heel_normal",
+      "group": "motion",
+      "duration_s": 8.0,
+      "instruction": "依次按压后跟区域并完全卸载，记录多次循环",
+      "status": "dry_run",
+      "csv": "heel_normal.csv"
+    },
+    {
+      "key": "shear_x",
+      "group": "motion",
+      "duration_s": 8.0,
+      "instruction": "保持接触并沿足底局部 X 正负方向缓慢剪切",
+      "status": "dry_run",
+      "csv": "shear_x.csv"
+    },
+    {
+      "key": "shear_y",
+      "group": "motion",
+      "duration_s": 8.0,
+      "instruction": "保持接触并沿脚尖/脚跟方向缓慢剪切",
+      "status": "dry_run",
+      "csv": "shear_y.csv"
+    },
+    {
+      "key": "tilt_pitch",
+      "group": "motion",
+      "duration_s": 8.0,
+      "instruction": "施加前后倾斜并回到完全卸载状态",
+      "status": "dry_run",
+      "csv": "tilt_pitch.csv"
+    },
+    {
+      "key": "tilt_roll",
+      "group": "motion",
+      "duration_s": 8.0,
+      "instruction": "施加左右倾斜并回到完全卸载状态",
+      "status": "dry_run",
+      "csv": "tilt_roll.csv"
+    },
+    {
+      "key": "standing_shift",
+      "group": "motion",
+      "duration_s": 8.0,
+      "instruction": "吊架保护下站立，缓慢进行前后和左右重心转移",
+      "status": "dry_run",
+      "csv": "standing_shift.csv"
+    },
+    {
+      "key": "walking",
+      "group": "motion",
+      "duration_s": 8.0,
+      "instruction": "吊架保护下低速行走，包含启动、停止和转向",
+      "status": "dry_run",
+      "csv": "walking.csv"
+    },
+    {
+      "key": "slip_events",
+      "group": "motion",
+      "duration_s": 8.0,
+      "instruction": "吊架保护下在低摩擦表面制造小幅可控滑移",
+      "status": "dry_run",
+      "csv": "slip_events.csv"
+    }
+  ],
+  "finished_utc": "2026-08-08T11:57:20.483293+00:00"
+}

@@ -1,0 +1,30 @@
+{
+  "format": "g1-dual-foot-ble-config-v1",
+  "layout": "config/sensor_layout_a4_15.json",
+  "ble": {
+    "characteristic_uuid": "0000ab01-0000-1000-8000-00805f9b34fb",
+    "source_timeout_s": 0.2,
+    "reconnect_delay_s": 2.0,
+    "ema_alpha": 0.25
+  },
+  "left": {
+    "device_name": "left",
+    "address": "98:A3:16:A1:BF:CA",
+    "sensor_permutation": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+    "axis_sign": [1, 1, 1],
+    "normalization": "normalization/left.json"
+  },
+  "right": {
+    "device_name": "right",
+    "address": "98:A3:16:A1:C1:2E",
+    "sensor_permutation": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+    "axis_sign": [1, 1, 1],
+    "normalization": "normalization/right.json"
+  },
+  "output": {
+    "path": "/tmp/g1_foot_rl_obs.bin",
+    "health_path": "/tmp/g1_foot_magnetic_health.json",
+    "rate_hz": 50.0,
+    "print_hz": 1.0
+  }
+}

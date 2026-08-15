@@ -1,0 +1,9 @@
+{
+  "format": "footsensor15-dual-dashboard-v2",
+  "left_address": "98:A3:16:A1:BF:CA",
+  "right_address": "98:A3:16:A1:C1:2E",
+  "left_device_name": "left",
+  "right_device_name": "right",
+  "left_weight": 1.0,
+  "right_weight": 1.0
+}

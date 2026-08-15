@@ -1,0 +1,17 @@
+{
+  "format": "footsensor15-video-cadence-profile-v1",
+  "source_video": "2c8e759d0d6a652adf6e89dc2a4c6d04.mp4",
+  "source_duration_s": 42.08,
+  "first_step_video_time_s": 1.9,
+  "method": "audio impact envelope plus lower-body periodic motion",
+  "profile": [
+    {"video_time_s": 1.9, "walking_time_s": 0.0, "cadence_spm": 90.0},
+    {"video_time_s": 11.4, "walking_time_s": 9.5, "cadence_spm": 90.0},
+    {"video_time_s": 13.9, "walking_time_s": 12.0, "cadence_spm": 65.0},
+    {"video_time_s": 16.9, "walking_time_s": 15.0, "cadence_spm": 72.0},
+    {"video_time_s": 19.9, "walking_time_s": 18.0, "cadence_spm": 108.0},
+    {"video_time_s": 33.4, "walking_time_s": 31.5, "cadence_spm": 110.0},
+    {"video_time_s": 36.4, "walking_time_s": 34.5, "cadence_spm": 94.0},
+    {"video_time_s": 42.1, "walking_time_s": 40.2, "cadence_spm": 90.0}
+  ]
+}

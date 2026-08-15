@@ -1,0 +1,41 @@
+{
+  "saved_at_utc": "2026-08-15T06:47:00Z",
+  "checkpoint": "proprio480_r5course_seed480_model1424.pt",
+  "sha256": "fda837a716a115cd03adaa40c668a724de20d6f740239aa05ec5ee61de77d1f6",
+  "source": "/home/mosense/guo/unitree_rl_lab/logs/rsl_rl/unitree_g1_29dof_velocity_foot_traction_proprio480_spatial_cadence_stride_transition_retention_r5/2026-08-14_16-16-42/model_1424.pt",
+  "task": "Unitree-G1-29dof-Velocity-Foot-TractionProprio480MagneticMotionStudent-SpatialFrictionCadenceStrideTransitionRetentionR5",
+  "actor_abi": {
+    "observation_group": "proprio480_policy",
+    "observation_dim": 480,
+    "layout": "base_ang_vel(15) + projected_gravity(15) + velocity_commands(15) + joint_pos_rel(145) + joint_vel_rel(145) + last_action(145)",
+    "no_foot_or_hall_channels": true,
+    "action_dim": 29,
+    "action_scale_rad": 0.25
+  },
+  "critic_abi": {
+    "observation_group": "critic",
+    "observation_dim": 570,
+    "privileged": true
+  },
+  "training": {
+    "seed": 480,
+    "warm_start": "/home/mosense/guo/unitree_rl_lab/model/rl/model_49999.pt",
+    "initial_actor_std": 0.10,
+    "iterations": 1425,
+    "envs": "225 iterations @ 512 envs, then 1200 iterations @ 1536 envs",
+    "total_steps": 117964800,
+    "final_train_metrics": {
+      "mean_reward": 6.48,
+      "mean_episode_length_steps": 1034,
+      "bad_orientation": 0.155,
+      "base_height_fall": 0.102,
+      "time_out": 0.760
+    }
+  },
+  "spec_envelope": {
+    "mu_min": 0.2,
+    "constant_mu_0.8_0.28_0.20_at_0.3_mps": "0 dynamics falls (3 seeds x 16 envs x 40 s)"
+  },
+  "runner_cfg": "unitree_rl_lab.tasks.locomotion.agents.rsl_rl_ppo_proprio480_cfg:FootTractionProprio480SpatialCadenceStrideTransitionRetentionR5PPORunnerCfg",
+  "env_cfg": "unitree_rl_lab.tasks.locomotion.robots.g1.29dof.velocity_proprio480_env_cfg:RobotFootTractionProprio480MagneticMotionSpatialFrictionCadenceStrideTransitionRetentionR5EnvCfg"
+}

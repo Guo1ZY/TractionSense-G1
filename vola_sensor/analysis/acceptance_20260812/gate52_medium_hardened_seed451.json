@@ -1,0 +1,1942 @@
+{
+  "format": "spatial-friction-course-eval-v2",
+  "task": "Unitree-G1-29dof-Velocity-Foot-TractionMagneticMotionStudent-SpatialFrictionMediumDenseFastBaseCaptureCalibratedExpertGateBceOnly",
+  "seed": 451,
+  "num_envs": 16,
+  "step_dt_s": 0.02,
+  "hall_fault_profile": {
+    "requested_hardened": true,
+    "domain_randomization_enabled": true,
+    "foot_dropout_probability": 0.1,
+    "dead_channel_probability": 0.08,
+    "maximum_packet_delay_steps": 5
+  },
+  "effective_hall_config": {
+    "implementation_mode": "approximate",
+    "sensor_sample_rate": 50.0,
+    "low_pass_cutoff": 20.0,
+    "auto_zero": true,
+    "auto_zero_samples": 8,
+    "enable_domain_randomization": true,
+    "normal_stiffness_scale_range": [
+      0.5,
+      1.8
+    ],
+    "shear_stiffness_scale_range": [
+      0.45,
+      2.0
+    ],
+    "damping_scale_range": [
+      0.55,
+      1.8
+    ],
+    "contact_spread_scale_range": [
+      0.65,
+      1.45
+    ],
+    "magnetic_moment_scale_range": [
+      0.6,
+      1.4
+    ],
+    "magnet_position_jitter_std": 0.0004,
+    "observation_sensor_gain_range": [
+      0.65,
+      1.35
+    ],
+    "observation_axis_gain_range": [
+      0.7,
+      1.3
+    ],
+    "observation_cross_axis_std": 0.08,
+    "observation_zero_residual_std": 0.08,
+    "dead_channel_probability": 0.08,
+    "foot_dropout_probability": 0.1,
+    "reported_sample_period_range": [
+      0.0125,
+      0.05
+    ],
+    "maximum_packet_delay_steps": 5
+  },
+  "actor_boundary": {
+    "policy_dim": 1864,
+    "policy_terms": [
+      "base_ang_vel",
+      "projected_gravity",
+      "velocity_commands",
+      "joint_pos_rel",
+      "joint_vel_rel",
+      "last_action",
+      "foot_magnetic_array",
+      "foot_sample_period_lr",
+      "foot_sensor_valid_lr",
+      "foot_sensor_age_lr"
+    ],
+    "policy_functions": [
+      "base_ang_vel",
+      "projected_gravity",
+      "generated_commands",
+      "joint_pos_rel",
+      "joint_vel_rel",
+      "last_action",
+      "hall_magnetic_array",
+      "hall_sample_period_lr",
+      "hall_sensor_valid_lr",
+      "lateral_motion_feedback"
+    ],
+    "policy_term_dims": [
+      [
+        15
+      ],
+      [
+        15
+      ],
+      [
+        15
+      ],
+      [
+        145
+      ],
+      [
+        145
+      ],
+      [
+        145
+      ],
+      [
+        1350
+      ],
+      [
+        30
+      ],
+      [
+        2
+      ],
+      [
+        2
+      ]
+    ],
+    "policy_history_lengths": [
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      15,
+      15,
+      0,
+      0
+    ],
+    "policy_slices": {
+      "base_ang_vel": [
+        0,
+        15
+      ],
+      "projected_gravity": [
+        15,
+        30
+      ],
+      "velocity_commands": [
+        30,
+        45
+      ],
+      "joint_pos_rel": [
+        45,
+        190
+      ],
+      "joint_vel_rel": [
+        190,
+        335
+      ],
+      "last_action": [
+        335,
+        480
+      ],
+      "foot_magnetic_array": [
+        480,
+        1830
+      ],
+      "foot_sample_period_lr": [
+        1830,
+        1860
+      ],
+      "foot_sensor_valid_lr": [
+        1860,
+        1862
+      ],
+      "foot_sensor_age_lr": [
+        1862,
+        1864
+      ]
+    },
+    "trailing_feature_mode": "motion_feedback",
+    "trailing_feature_names": [
+      "body_lateral_velocity",
+      "relative_heading_error"
+    ],
+    "foot_order": [
+      "left",
+      "right"
+    ],
+    "resolved_foot_body_ids": [
+      18,
+      19
+    ],
+    "resolved_foot_body_names": [
+      "left_ankle_roll_link",
+      "right_ankle_roll_link"
+    ],
+    "action_dim": 29,
+    "action_scale_rad": 0.25,
+    "action_uses_default_offset": true,
+    "actor_joint_names": [
+      "left_hip_pitch_joint",
+      "right_hip_pitch_joint",
+      "waist_yaw_joint",
+      "left_hip_roll_joint",
+      "right_hip_roll_joint",
+      "waist_roll_joint",
+      "left_hip_yaw_joint",
+      "right_hip_yaw_joint",
+      "waist_pitch_joint",
+      "left_knee_joint",
+      "right_knee_joint",
+      "left_shoulder_pitch_joint",
+      "right_shoulder_pitch_joint",
+      "left_ankle_pitch_joint",
+      "right_ankle_pitch_joint",
+      "left_shoulder_roll_joint",
+      "right_shoulder_roll_joint",
+      "left_ankle_roll_joint",
+      "right_ankle_roll_joint",
+      "left_shoulder_yaw_joint",
+      "right_shoulder_yaw_joint",
+      "left_elbow_joint",
+      "right_elbow_joint",
+      "left_wrist_roll_joint",
+      "right_wrist_roll_joint",
+      "left_wrist_pitch_joint",
+      "right_wrist_pitch_joint",
+      "left_wrist_yaw_joint",
+      "right_wrist_yaw_joint"
+    ],
+    "sdk_joint_names": [
+      "left_hip_pitch_joint",
+      "left_hip_roll_joint",
+      "left_hip_yaw_joint",
+      "left_knee_joint",
+      "left_ankle_pitch_joint",
+      "left_ankle_roll_joint",
+      "right_hip_pitch_joint",
+      "right_hip_roll_joint",
+      "right_hip_yaw_joint",
+      "right_knee_joint",
+      "right_ankle_pitch_joint",
+      "right_ankle_roll_joint",
+      "waist_yaw_joint",
+      "waist_roll_joint",
+      "waist_pitch_joint",
+      "left_shoulder_pitch_joint",
+      "left_shoulder_roll_joint",
+      "left_shoulder_yaw_joint",
+      "left_elbow_joint",
+      "left_wrist_roll_joint",
+      "left_wrist_pitch_joint",
+      "left_wrist_yaw_joint",
+      "right_shoulder_pitch_joint",
+      "right_shoulder_roll_joint",
+      "right_shoulder_yaw_joint",
+      "right_elbow_joint",
+      "right_wrist_roll_joint",
+      "right_wrist_pitch_joint",
+      "right_wrist_yaw_joint"
+    ],
+    "actor_to_sdk_joint_ids_map": [
+      0,
+      6,
+      12,
+      1,
+      7,
+      13,
+      2,
+      8,
+      14,
+      3,
+      9,
+      15,
+      22,
+      4,
+      10,
+      16,
+      23,
+      5,
+      11,
+      17,
+      24,
+      18,
+      25,
+      19,
+      26,
+      20,
+      27,
+      21,
+      28
+    ],
+    "action_delay_steps": [
+      0,
+      2
+    ],
+    "action_delay_probabilities": [
+      0.15,
+      0.15,
+      0.7
+    ],
+    "hall_flatten_order": "time_oldest_to_newest,left/right,P00..P14,XYZ",
+    "hall_sensor_rng_seed": 451,
+    "runtime_value_order_checks": {
+      "history_buffers_match_actor_slices": true,
+      "latest_hall_frame_matches_sensor_packet": true,
+      "latest_period_matches_sensor_packet": true,
+      "valid_lr_matches_sensor_packet": true,
+      "motion_feedback_matches_direct_function": true
+    },
+    "truth_leaks": []
+  },
+  "usd_physx": {
+    "checked_colliders": 48,
+    "patches": [
+      {
+        "env_path": "/World/envs/env_0",
+        "collider_path": "/World/envs/env_0/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_0/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_0",
+        "collider_path": "/World/envs/env_0/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_0/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_0",
+        "collider_path": "/World/envs/env_0/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_0/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_1",
+        "collider_path": "/World/envs/env_1/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_1/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_1",
+        "collider_path": "/World/envs/env_1/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_1/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_1",
+        "collider_path": "/World/envs/env_1/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_1/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_2",
+        "collider_path": "/World/envs/env_2/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_2/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_2",
+        "collider_path": "/World/envs/env_2/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_2/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_2",
+        "collider_path": "/World/envs/env_2/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_2/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_3",
+        "collider_path": "/World/envs/env_3/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_3/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_3",
+        "collider_path": "/World/envs/env_3/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_3/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_3",
+        "collider_path": "/World/envs/env_3/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_3/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_4",
+        "collider_path": "/World/envs/env_4/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_4/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_4",
+        "collider_path": "/World/envs/env_4/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_4/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_4",
+        "collider_path": "/World/envs/env_4/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_4/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_5",
+        "collider_path": "/World/envs/env_5/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_5/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_5",
+        "collider_path": "/World/envs/env_5/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_5/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_5",
+        "collider_path": "/World/envs/env_5/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_5/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_6",
+        "collider_path": "/World/envs/env_6/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_6/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_6",
+        "collider_path": "/World/envs/env_6/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_6/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_6",
+        "collider_path": "/World/envs/env_6/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_6/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_7",
+        "collider_path": "/World/envs/env_7/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_7/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_7",
+        "collider_path": "/World/envs/env_7/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_7/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_7",
+        "collider_path": "/World/envs/env_7/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_7/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_8",
+        "collider_path": "/World/envs/env_8/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_8/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_8",
+        "collider_path": "/World/envs/env_8/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_8/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_8",
+        "collider_path": "/World/envs/env_8/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_8/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_9",
+        "collider_path": "/World/envs/env_9/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_9/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_9",
+        "collider_path": "/World/envs/env_9/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_9/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_9",
+        "collider_path": "/World/envs/env_9/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_9/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_10",
+        "collider_path": "/World/envs/env_10/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_10/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_10",
+        "collider_path": "/World/envs/env_10/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_10/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_10",
+        "collider_path": "/World/envs/env_10/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_10/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_11",
+        "collider_path": "/World/envs/env_11/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_11/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_11",
+        "collider_path": "/World/envs/env_11/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_11/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_11",
+        "collider_path": "/World/envs/env_11/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_11/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_12",
+        "collider_path": "/World/envs/env_12/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_12/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_12",
+        "collider_path": "/World/envs/env_12/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_12/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_12",
+        "collider_path": "/World/envs/env_12/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_12/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_13",
+        "collider_path": "/World/envs/env_13/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_13/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_13",
+        "collider_path": "/World/envs/env_13/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_13/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_13",
+        "collider_path": "/World/envs/env_13/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_13/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_14",
+        "collider_path": "/World/envs/env_14/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_14/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_14",
+        "collider_path": "/World/envs/env_14/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_14/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_14",
+        "collider_path": "/World/envs/env_14/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_14/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_15",
+        "collider_path": "/World/envs/env_15/FrictionHighStart/geometry/mesh",
+        "material_path": "/World/envs/env_15/FrictionHighStart/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_15",
+        "collider_path": "/World/envs/env_15/FrictionLow/geometry/mesh",
+        "material_path": "/World/envs/env_15/FrictionLow/geometry/material",
+        "static": true,
+        "static_friction": 0.2800000011920929,
+        "dynamic_friction": 0.2800000011920929,
+        "friction_combine_mode": "multiply"
+      },
+      {
+        "env_path": "/World/envs/env_15",
+        "collider_path": "/World/envs/env_15/FrictionHighEnd/geometry/mesh",
+        "material_path": "/World/envs/env_15/FrictionHighEnd/geometry/material",
+        "static": true,
+        "static_friction": 0.8999999761581421,
+        "dynamic_friction": 0.8999999761581421,
+        "friction_combine_mode": "multiply"
+      }
+    ]
+  },
+  "runtime_shapes": {
+    "contact_sensors": {
+      "left": {
+        "filter_paths": [
+          "/World/envs/env_.*/FrictionHighStart/geometry/mesh",
+          "/World/envs/env_.*/FrictionLow/geometry/mesh",
+          "/World/envs/env_.*/FrictionHighEnd/geometry/mesh"
+        ],
+        "filter_count": 3,
+        "force_matrix_shape": [
+          16,
+          1,
+          3,
+          3
+        ]
+      },
+      "right": {
+        "filter_paths": [
+          "/World/envs/env_.*/FrictionHighStart/geometry/mesh",
+          "/World/envs/env_.*/FrictionLow/geometry/mesh",
+          "/World/envs/env_.*/FrictionHighEnd/geometry/mesh"
+        ],
+        "filter_count": 3,
+        "force_matrix_shape": [
+          16,
+          1,
+          3,
+          3
+        ]
+      }
+    },
+    "hall_raw_shape": [
+      16,
+      2,
+      15,
+      3
+    ],
+    "hall_filtered_shape": [
+      16,
+      2,
+      15,
+      3
+    ],
+    "hall_raw_abs_max_T": 0.015461999922990799,
+    "hall_filtered_abs_max_T": 0.0,
+    "hall_randomization_probe": {
+      "normal_scale_first6": [
+        0.7198286652565002,
+        1.0573054552078247,
+        0.846438467502594,
+        1.0880470275878906,
+        0.7793724536895752,
+        0.6279861927032471
+      ],
+      "shear_scale_first6": [
+        1.3601192235946655,
+        1.8719074726104736,
+        0.5709826946258545,
+        0.8781625032424927,
+        1.7049810886383057,
+        1.919562816619873
+      ],
+      "delay_steps_first6": [
+        5,
+        5,
+        2,
+        1,
+        2,
+        0
+      ],
+      "channel_keep_count": 440,
+      "foot_keep_count": 28
+    }
+  },
+  "privileged_label_probe": {
+    "compressed_labels": [
+      "HIGH",
+      "LOW",
+      "HIGH"
+    ],
+    "patches": [
+      {
+        "patch": "FrictionHighStart",
+        "local_x_m": -0.5,
+        "expected_low": false,
+        "low_label_fraction": 0.0,
+        "expected_filter_index": 0,
+        "dominant_filter_fraction": 1.0
+      },
+      {
+        "patch": "FrictionLow",
+        "local_x_m": 0.5,
+        "expected_low": true,
+        "low_label_fraction": 1.0,
+        "expected_filter_index": 1,
+        "dominant_filter_fraction": 1.0
+      },
+      {
+        "patch": "FrictionHighEnd",
+        "local_x_m": 1.5,
+        "expected_low": false,
+        "low_label_fraction": 0.0,
+        "expected_filter_index": 2,
+        "dominant_filter_fraction": 1.0
+      }
+    ]
+  },
+  "natural_rollout": {
+    "policy_kind": "rsl_rl_pt",
+    "steps_requested": 400,
+    "steps_run": 400,
+    "command_m_s": 0.8,
+    "completed_hlh_envs": 16,
+    "completed_hlh_fraction": 1.0,
+    "course_success_events": 16,
+    "fall_events": 0,
+    "fall_envs": 0,
+    "nan_detected": false,
+    "trace_env_compressed_labels": [
+      "HIGH",
+      "LOW",
+      "HIGH"
+    ],
+    "mean_body_vx_m_s": {
+      "high_start": 0.6738729969725774,
+      "low": 0.6226516083603905,
+      "high_end": 0.7428401083464127
+    },
+    "region_frame_counts": {
+      "high_start": 1703,
+      "low": 1488,
+      "high_end": 1721
+    },
+    "first_episode_only": true,
+    "transition_response": {
+      "definition": "first-episode-causal-response-v1",
+      "step_dt_s": 0.02,
+      "first_fall_step": null,
+      "first_fall_time_s": null,
+      "low_speed_target_m_s": 0.32,
+      "low_entry_envs": 16,
+      "low_entry_speed_m_s": {
+        "count": 16,
+        "mean": 0.8263580314815044,
+        "median": 0.8187865018844604,
+        "min": 0.744101881980896,
+        "max": 0.9002299904823303
+      },
+      "deceleration_after_low_contact": {
+        "0.5s": {
+          "sampled_envs": 16,
+          "survival_fraction": 1.0,
+          "vx_m_s": {
+            "count": 16,
+            "mean": 0.6684271357953548,
+            "median": 0.6410321593284607,
+            "min": 0.5298986434936523,
+            "max": 0.7774692177772522
+          },
+          "deceleration_m_s": {
+            "count": 16,
+            "mean": 0.1579308956861496,
+            "median": 0.1868729293346405,
+            "min": 0.005365192890167236,
+            "max": 0.35289913415908813
+          },
+          "at_or_below_target_fraction": 0.0
+        },
+        "1s": {
+          "sampled_envs": 16,
+          "survival_fraction": 1.0,
+          "vx_m_s": {
+            "count": 16,
+            "mean": 0.5666024703532457,
+            "median": 0.5694857239723206,
+            "min": 0.4293767809867859,
+            "max": 0.7952381372451782
+          },
+          "deceleration_m_s": {
+            "count": 16,
+            "mean": 0.2597555611282587,
+            "median": 0.27423155307769775,
+            "min": -0.0017378926277160645,
+            "max": 0.4228697121143341
+          },
+          "at_or_below_target_fraction": 0.0
+        }
+      },
+      "high_end_entry_envs": 16,
+      "high_recovery_speed_m_s": 0.7,
+      "recovery_stable_steps": 3,
+      "absolute_high_recovery": {
+        "recovered_envs": 16,
+        "recovery_fraction": 1.0,
+        "time_s": {
+          "count": 16,
+          "mean": 0.71625,
+          "median": 0.66,
+          "min": 0.24,
+          "max": 1.24
+        }
+      },
+      "relative_90pct_pre_low_recovery": {
+        "recovered_envs": 16,
+        "recovery_fraction": 1.0,
+        "time_s": {
+          "count": 16,
+          "mean": 0.9125000000000001,
+          "median": 0.93,
+          "min": 0.26,
+          "max": 1.4000000000000001
+        }
+      },
+      "per_env": [
+        {
+          "env_id": 0,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 340,
+          "low_entry_step": 115,
+          "low_entry_time_s": 2.32,
+          "low_entry_vx_m_s": 0.8056961297988892,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.5828713774681091,
+              "deceleration_m_s": 0.22282475233078003,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.4293767809867859,
+              "deceleration_m_s": 0.37631934881210327,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 227,
+          "absolute_recovery_time_s": 0.9400000000000001,
+          "relative_90pct_recovery_time_s": 1.1400000000000001
+        },
+        {
+          "env_id": 1,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 296,
+          "low_entry_step": 113,
+          "low_entry_time_s": 2.2800000000000002,
+          "low_entry_vx_m_s": 0.812451958656311,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.6033352613449097,
+              "deceleration_m_s": 0.20911669731140137,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.5190140604972839,
+              "deceleration_m_s": 0.2934378981590271,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 188,
+          "absolute_recovery_time_s": 0.5,
+          "relative_90pct_recovery_time_s": 0.52
+        },
+        {
+          "env_id": 2,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 285,
+          "low_entry_step": 94,
+          "low_entry_time_s": 1.9000000000000001,
+          "low_entry_vx_m_s": 0.8705344200134277,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.6864783763885498,
+              "deceleration_m_s": 0.18405604362487793,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.5771713852882385,
+              "deceleration_m_s": 0.2933630347251892,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 178,
+          "absolute_recovery_time_s": 0.46,
+          "relative_90pct_recovery_time_s": 0.5
+        },
+        {
+          "env_id": 3,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 292,
+          "low_entry_step": 107,
+          "low_entry_time_s": 2.16,
+          "low_entry_vx_m_s": 0.7935002446174622,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.7701619267463684,
+              "deceleration_m_s": 0.02333831787109375,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.7952381372451782,
+              "deceleration_m_s": -0.0017378926277160645,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 190,
+          "absolute_recovery_time_s": 0.24,
+          "relative_90pct_recovery_time_s": 0.26
+        },
+        {
+          "env_id": 4,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 285,
+          "low_entry_step": 92,
+          "low_entry_time_s": 1.86,
+          "low_entry_vx_m_s": 0.8575034141540527,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.7739534974098206,
+              "deceleration_m_s": 0.08354991674423218,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.5921115279197693,
+              "deceleration_m_s": 0.26539188623428345,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 178,
+          "absolute_recovery_time_s": 0.42,
+          "relative_90pct_recovery_time_s": 0.62
+        },
+        {
+          "env_id": 5,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 319,
+          "low_entry_step": 112,
+          "low_entry_time_s": 2.2600000000000002,
+          "low_entry_vx_m_s": 0.8251210451126099,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.7260686159133911,
+              "deceleration_m_s": 0.09905242919921875,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.5764349699020386,
+              "deceleration_m_s": 0.2486860752105713,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 194,
+          "absolute_recovery_time_s": 1.16,
+          "relative_90pct_recovery_time_s": 1.18
+        },
+        {
+          "env_id": 6,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 314,
+          "low_entry_step": 109,
+          "low_entry_time_s": 2.2,
+          "low_entry_vx_m_s": 0.8015629053115845,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.7665917873382568,
+              "deceleration_m_s": 0.03497111797332764,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.6328836679458618,
+              "deceleration_m_s": 0.16867923736572266,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 186,
+          "absolute_recovery_time_s": 0.96,
+          "relative_90pct_recovery_time_s": 1.36
+        },
+        {
+          "env_id": 7,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 313,
+          "low_entry_step": 93,
+          "low_entry_time_s": 1.8800000000000001,
+          "low_entry_vx_m_s": 0.8122828602790833,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.6225930452346802,
+              "deceleration_m_s": 0.18968981504440308,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.6020615696907043,
+              "deceleration_m_s": 0.2102212905883789,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 189,
+          "absolute_recovery_time_s": 1.24,
+          "relative_90pct_recovery_time_s": 1.4000000000000001
+        },
+        {
+          "env_id": 8,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 309,
+          "low_entry_step": 111,
+          "low_entry_time_s": 2.24,
+          "low_entry_vx_m_s": 0.7682995200157166,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.7629343271255493,
+              "deceleration_m_s": 0.005365192890167236,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.5991081595420837,
+              "deceleration_m_s": 0.1691913604736328,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 187,
+          "absolute_recovery_time_s": 1.08,
+          "relative_90pct_recovery_time_s": 1.06
+        },
+        {
+          "env_id": 9,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 333,
+          "low_entry_step": 112,
+          "low_entry_time_s": 2.2600000000000002,
+          "low_entry_vx_m_s": 0.7981950044631958,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.6008346080780029,
+              "deceleration_m_s": 0.19736039638519287,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.5024449825286865,
+              "deceleration_m_s": 0.2957500219345093,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 210,
+          "absolute_recovery_time_s": 0.88,
+          "relative_90pct_recovery_time_s": 1.08
+        },
+        {
+          "env_id": 10,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 297,
+          "low_entry_step": 110,
+          "low_entry_time_s": 2.22,
+          "low_entry_vx_m_s": 0.8257253170013428,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.7774692177772522,
+              "deceleration_m_s": 0.048256099224090576,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.5537142157554626,
+              "deceleration_m_s": 0.2720111012458801,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 197,
+          "absolute_recovery_time_s": 0.8200000000000001,
+          "relative_90pct_recovery_time_s": 0.88
+        },
+        {
+          "env_id": 11,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 288,
+          "low_entry_step": 100,
+          "low_entry_time_s": 2.02,
+          "low_entry_vx_m_s": 0.9002299904823303,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.6279171109199524,
+              "deceleration_m_s": 0.27231287956237793,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.6237779855728149,
+              "deceleration_m_s": 0.2764520049095154,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 183,
+          "absolute_recovery_time_s": 0.36,
+          "relative_90pct_recovery_time_s": 1.12
+        },
+        {
+          "env_id": 12,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 327,
+          "low_entry_step": 112,
+          "low_entry_time_s": 2.2600000000000002,
+          "low_entry_vx_m_s": 0.8827977776527405,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.5298986434936523,
+              "deceleration_m_s": 0.35289913415908813,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.45992806553840637,
+              "deceleration_m_s": 0.4228697121143341,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 227,
+          "absolute_recovery_time_s": 0.46,
+          "relative_90pct_recovery_time_s": 0.76
+        },
+        {
+          "env_id": 13,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 302,
+          "low_entry_step": 111,
+          "low_entry_time_s": 2.24,
+          "low_entry_vx_m_s": 0.8535899519920349,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.654147207736969,
+              "deceleration_m_s": 0.19944274425506592,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.49733591079711914,
+              "deceleration_m_s": 0.35625404119491577,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 192,
+          "absolute_recovery_time_s": 0.5,
+          "relative_90pct_recovery_time_s": 0.86
+        },
+        {
+          "env_id": 14,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 319,
+          "low_entry_step": 108,
+          "low_entry_time_s": 2.18,
+          "low_entry_vx_m_s": 0.744101881980896,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.6204149127006531,
+              "deceleration_m_s": 0.12368696928024292,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.5625364780426025,
+              "deceleration_m_s": 0.18156540393829346,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 201,
+          "absolute_recovery_time_s": 1.0,
+          "relative_90pct_recovery_time_s": 0.92
+        },
+        {
+          "env_id": 15,
+          "first_fall_step": null,
+          "first_fall_time_s": null,
+          "terminal_step": 301,
+          "low_entry_step": 107,
+          "low_entry_time_s": 2.16,
+          "low_entry_vx_m_s": 0.8701360821723938,
+          "deceleration": {
+            "0.5s": {
+              "vx_m_s": 0.5891642570495605,
+              "deceleration_m_s": 0.28097182512283325,
+              "at_or_below_target": false
+            },
+            "1s": {
+              "vx_m_s": 0.5425016283988953,
+              "deceleration_m_s": 0.32763445377349854,
+              "at_or_below_target": false
+            }
+          },
+          "high_end_entry_step": 191,
+          "absolute_recovery_time_s": 0.44,
+          "relative_90pct_recovery_time_s": 0.9400000000000001
+        }
+      ]
+    },
+    "initial_hall_fault_state": {
+      "health_group_counts": {
+        "channel_degraded": 12,
+        "fully_healthy": 1,
+        "single_foot_offline": 3
+      },
+      "envs": [
+        {
+          "env_id": 0,
+          "group": "channel_degraded",
+          "online_feet": 2,
+          "live_channels_left": 12,
+          "live_channels_right": 14,
+          "delay_steps_left": 5,
+          "delay_steps_right": 0
+        },
+        {
+          "env_id": 1,
+          "group": "channel_degraded",
+          "online_feet": 2,
+          "live_channels_left": 14,
+          "live_channels_right": 14,
+          "delay_steps_left": 4,
+          "delay_steps_right": 4
+        },
+        {
+          "env_id": 2,
+          "group": "channel_degraded",
+          "online_feet": 2,
+          "live_channels_left": 15,
+          "live_channels_right": 14,
+          "delay_steps_left": 2,
+          "delay_steps_right": 5
+        },
+        {
+          "env_id": 3,
+          "group": "fully_healthy",
+          "online_feet": 2,
+          "live_channels_left": 15,
+          "live_channels_right": 15,
+          "delay_steps_left": 2,
+          "delay_steps_right": 1
+        },
+        {
+          "env_id": 4,
+          "group": "channel_degraded",
+          "online_feet": 2,
+          "live_channels_left": 12,
+          "live_channels_right": 11,
+          "delay_steps_left": 1,
+          "delay_steps_right": 4
+        },
+        {
+          "env_id": 5,
+          "group": "channel_degraded",
+          "online_feet": 2,
+          "live_channels_left": 12,
+          "live_channels_right": 14,
+          "delay_steps_left": 5,
+          "delay_steps_right": 0
+        },
+        {
+          "env_id": 6,
+          "group": "channel_degraded",
+          "online_feet": 2,
+          "live_channels_left": 15,
+          "live_channels_right": 14,
+          "delay_steps_left": 2,
+          "delay_steps_right": 5
+        },
+        {
+          "env_id": 7,
+          "group": "channel_degraded",
+          "online_feet": 2,
+          "live_channels_left": 14,
+          "live_channels_right": 15,
+          "delay_steps_left": 3,
+          "delay_steps_right": 0
+        },
+        {
+          "env_id": 8,
+          "group": "single_foot_offline",
+          "online_feet": 1,
+          "live_channels_left": 15,
+          "live_channels_right": 12,
+          "delay_steps_left": 3,
+          "delay_steps_right": 5
+        },
+        {
+          "env_id": 9,
+          "group": "channel_degraded",
+          "online_feet": 2,
+          "live_channels_left": 15,
+          "live_channels_right": 12,
+          "delay_steps_left": 3,
+          "delay_steps_right": 4
+        },
+        {
+          "env_id": 10,
+          "group": "channel_degraded",
+          "online_feet": 2,
+          "live_channels_left": 13,
+          "live_channels_right": 13,
+          "delay_steps_left": 2,
+          "delay_steps_right": 5
+        },
+        {
+          "env_id": 11,
+          "group": "channel_degraded",
+          "online_feet": 2,
+          "live_channels_left": 15,
+          "live_channels_right": 13,
+          "delay_steps_left": 4,
+          "delay_steps_right": 0
+        },
+        {
+          "env_id": 12,
+          "group": "single_foot_offline",
+          "online_feet": 1,
+          "live_channels_left": 13,
+          "live_channels_right": 14,
+          "delay_steps_left": 3,
+          "delay_steps_right": 5
+        },
+        {
+          "env_id": 13,
+          "group": "single_foot_offline",
+          "online_feet": 1,
+          "live_channels_left": 11,
+          "live_channels_right": 15,
+          "delay_steps_left": 4,
+          "delay_steps_right": 4
+        },
+        {
+          "env_id": 14,
+          "group": "channel_degraded",
+          "online_feet": 2,
+          "live_channels_left": 15,
+          "live_channels_right": 12,
+          "delay_steps_left": 4,
+          "delay_steps_right": 3
+        },
+        {
+          "env_id": 15,
+          "group": "channel_degraded",
+          "online_feet": 2,
+          "live_channels_left": 12,
+          "live_channels_right": 15,
+          "delay_steps_left": 0,
+          "delay_steps_right": 4
+        }
+      ],
+      "sampled_statistics": {
+        "channel_keep_fraction": 0.9062500596046448,
+        "foot_keep_fraction": 0.90625,
+        "delay_steps": {
+          "min": 0.0,
+          "mean": 3.0,
+          "max": 5.0,
+          "std": 1.7139136791229248
+        },
+        "reported_sample_period_s": {
+          "min": 0.013358069583773613,
+          "mean": 0.03490466624498367,
+          "max": 0.049939341843128204,
+          "std": 0.010605890303850174
+        },
+        "normal_stiffness_scale": {
+          "min": 0.5025366544723511,
+          "mean": 1.1572306156158447,
+          "max": 1.797847032546997,
+          "std": 0.38496655225753784
+        },
+        "shear_stiffness_scale": {
+          "min": 0.4503602385520935,
+          "mean": 1.27244234085083,
+          "max": 1.9985206127166748,
+          "std": 0.45397064089775085
+        },
+        "damping_scale": {
+          "min": 0.5534078478813171,
+          "mean": 1.1716978549957275,
+          "max": 1.7993931770324707,
+          "std": 0.35864683985710144
+        },
+        "magnetic_moment_scale": {
+          "min": 0.6000065803527832,
+          "mean": 0.9920374155044556,
+          "max": 1.3998615741729736,
+          "std": 0.22961008548736572
+        },
+        "magnet_position_jitter_m": {
+          "min": -0.0012000000569969416,
+          "mean": -2.0589841369655915e-06,
+          "max": 0.0012000000569969416,
+          "std": 0.00040687149157747626
+        },
+        "observation_gain": {
+          "min": 0.48038822412490845,
+          "mean": 0.9701772332191467,
+          "max": 1.6898078918457031,
+          "std": 0.24621425569057465
+        },
+        "observation_cross_axis_off_diagonal": {
+          "min": -0.3137019872665405,
+          "mean": 0.001381603186018765,
+          "max": 0.27644482254981995,
+          "std": 0.06491344422101974
+        },
+        "observation_zero_residual": {
+          "min": -0.2506496012210846,
+          "mean": 0.0004263371229171753,
+          "max": 0.2743037939071655,
+          "std": 0.07910168170928955
+        }
+      }
+    },
+    "hall_health_performance": {
+      "channel_degraded": {
+        "envs": 12,
+        "fall_envs": 0,
+        "completed_hlh_envs": 12,
+        "mean_body_vx_m_s": {
+          "high_start": 0.6742288420597712,
+          "low": 0.6250065465768179,
+          "high_end": 0.739096611738205
+        },
+        "mean_deceleration_0_5s_m_s": 0.16215407848358154,
+        "mean_deceleration_1_0s_m_s": 0.26745931307474774,
+        "absolute_high_recovery_fraction": 1.0,
+        "mean_absolute_high_recovery_time_s": 0.765
+      },
+      "fully_healthy": {
+        "envs": 1,
+        "fall_envs": 0,
+        "completed_hlh_envs": 1,
+        "mean_body_vx_m_s": {
+          "high_start": 0.6271933913230896,
+          "low": 0.6994842886924744,
+          "high_end": 0.8043973445892334
+        },
+        "mean_deceleration_0_5s_m_s": 0.02333831787109375,
+        "mean_deceleration_1_0s_m_s": -0.0017378926277160645,
+        "absolute_high_recovery_fraction": 1.0,
+        "mean_absolute_high_recovery_time_s": 0.24
+      },
+      "single_foot_offline": {
+        "envs": 3,
+        "fall_envs": 0,
+        "completed_hlh_envs": 3,
+        "mean_body_vx_m_s": {
+          "high_start": 0.6859648029009501,
+          "low": 0.6093198458353678,
+          "high_end": 0.7503992319107056
+        },
+        "mean_deceleration_0_5s_m_s": 0.18590235710144043,
+        "mean_deceleration_1_0s_m_s": 0.31610503792762756,
+        "absolute_high_recovery_fraction": 1.0,
+        "mean_absolute_high_recovery_time_s": 0.68
+      }
+    },
+    "fastbase_capture_diagnostics": {
+      "definition": "fastbase-capture-observation-only-diagnostics-v2",
+      "available": true,
+      "sample_count": 4936,
+      "step_dt_s": 0.02,
+      "stage_encoding": {
+        "HIGH_START": 0,
+        "LOW": 1,
+        "HIGH_END": 2
+      },
+      "overall": {
+        "samples": 4936,
+        "time_s": {
+          "count": 4936,
+          "mean": 3.0838614262560777,
+          "median": 3.08,
+          "min": 0.0,
+          "max": 6.8
+        },
+        "raw_capture_probability": {
+          "count": 4936,
+          "mean": 0.3704654767255452,
+          "median": 0.315702348947525,
+          "min": 0.0020757121965289116,
+          "max": 0.986457884311676,
+          "p95": 0.888223186135292
+        },
+        "capture_probability": {
+          "count": 4936,
+          "mean": 0.12336902553026899,
+          "median": 0.004833302227780223,
+          "min": 1.717703423942396e-09,
+          "max": 0.9998146891593933,
+          "p95": 0.9241398274898529
+        },
+        "effective_gate": {
+          "count": 4936,
+          "mean": 0.09129062968370892,
+          "median": 0.0017595237586647272,
+          "min": 0.0,
+          "max": 0.9998146891593933,
+          "p95": 0.8066230565309525
+        },
+        "capture_delta_l2": {
+          "count": 4936,
+          "mean": 0.051046260745485884,
+          "median": 0.0010022661881521344,
+          "min": 0.0,
+          "max": 0.6764734387397766,
+          "p95": 0.4227745607495308
+        },
+        "effective_gate_ge_activation_fraction": 0.07901134521880065
+      },
+      "by_stage": {
+        "HIGH_START": {
+          "samples": 1837,
+          "time_s": {
+            "count": 1837,
+            "mean": 1.1431246597713665,
+            "median": 1.1400000000000001,
+            "min": 0.0,
+            "max": 2.52
+          },
+          "raw_capture_probability": {
+            "count": 1837,
+            "mean": 0.24343380886743482,
+            "median": 0.22331693768501282,
+            "min": 0.0020757121965289116,
+            "max": 0.93219393491745,
+            "p95": 0.6331641077995298
+          },
+          "capture_probability": {
+            "count": 1837,
+            "mean": 0.02806195320593396,
+            "median": 0.0013214395148679614,
+            "min": 1.717703423942396e-09,
+            "max": 0.982144832611084,
+            "p95": 0.15459671616554224
+          },
+          "effective_gate": {
+            "count": 1837,
+            "mean": 0.0216591824633023,
+            "median": 0.00043711019679903984,
+            "min": 0.0,
+            "max": 0.982144832611084,
+            "p95": 0.07377543747424962
+          },
+          "capture_delta_l2": {
+            "count": 1837,
+            "mean": 0.011994778759172703,
+            "median": 0.00024693741579540074,
+            "min": 0.0,
+            "max": 0.5020158886909485,
+            "p95": 0.04231697767972918
+          },
+          "effective_gate_ge_activation_fraction": 0.010342950462710943
+        },
+        "LOW": {
+          "samples": 1297,
+          "time_s": {
+            "count": 1297,
+            "mean": 3.1082035466461067,
+            "median": 3.1,
+            "min": 2.04,
+            "max": 4.44
+          },
+          "raw_capture_probability": {
+            "count": 1297,
+            "mean": 0.6605960905046396,
+            "median": 0.6638219952583313,
+            "min": 0.17702749371528625,
+            "max": 0.986457884311676,
+            "p95": 0.957821273803711
+          },
+          "capture_probability": {
+            "count": 1297,
+            "mean": 0.3890013679205986,
+            "median": 0.20932915806770325,
+            "min": 0.0005953894578851759,
+            "max": 0.9998146891593933,
+            "p95": 0.9954476833343506
+          },
+          "effective_gate": {
+            "count": 1297,
+            "mean": 0.2879594650873774,
+            "median": 0.06936895847320557,
+            "min": 0.0,
+            "max": 0.9998146891593933,
+            "p95": 0.9919366955757141
+          },
+          "capture_delta_l2": {
+            "count": 1297,
+            "mean": 0.16038322733306243,
+            "median": 0.040100663900375366,
+            "min": 0.0,
+            "max": 0.6764734387397766,
+            "p95": 0.5738043904304505
+          },
+          "effective_gate_ge_activation_fraction": 0.27293754818812643
+        },
+        "HIGH_END": {
+          "samples": 1802,
+          "time_s": {
+            "count": 1802,
+            "mean": 5.044772475027747,
+            "median": 5.04,
+            "min": 3.56,
+            "max": 6.8
+          },
+          "raw_capture_probability": {
+            "count": 1802,
+            "mean": 0.2911412635090431,
+            "median": 0.26064765453338623,
+            "min": 0.01863553561270237,
+            "max": 0.9294317960739136,
+            "p95": 0.6240875720977782
+          },
+          "capture_probability": {
+            "count": 1802,
+            "mean": 0.029336807871859424,
+            "median": 0.0023123788414523005,
+            "min": 7.519068390138273e-07,
+            "max": 0.9799541234970093,
+            "p95": 0.1411307908594607
+          },
+          "effective_gate": {
+            "count": 1802,
+            "mean": 0.02072097875436869,
+            "median": 0.0011268771486356854,
+            "min": 0.0,
+            "max": 0.8234863877296448,
+            "p95": 0.09546523168683017
+          },
+          "capture_delta_l2": {
+            "count": 1802,
+            "mean": 0.012160315542805835,
+            "median": 0.0006344488065224141,
+            "min": 0.0,
+            "max": 0.44376713037490845,
+            "p95": 0.059072227589785975
+          },
+          "effective_gate_ge_activation_fraction": 0.009433962264150943
+        }
+      },
+      "low_vs_high_auc": {
+        "positive_stage": "LOW",
+        "negative_stages": [
+          "HIGH_START",
+          "HIGH_END"
+        ],
+        "raw_capture_probability": 0.9166915089104732,
+        "capture_probability": 0.9166915089104732,
+        "effective_gate": 0.7665643738282035,
+        "capture_delta_l2": 0.7644833459504389
+      },
+      "low_activation": {
+        "effective_gate_threshold": 0.5,
+        "entered_envs": 16,
+        "activated_envs": 13,
+        "activation_fraction": 0.8125,
+        "latency_s": {
+          "count": 13,
+          "mean": 0.1723076923076923,
+          "median": 0.08,
+          "min": 0.0,
+          "max": 0.74
+        }
+      },
+      "high_end_release": {
+        "effective_gate_threshold": 0.1,
+        "stable_steps": 3,
+        "entered_envs": 16,
+        "released_envs": 16,
+        "release_fraction": 1.0,
+        "latency_s": {
+          "count": 16,
+          "mean": 0.06875,
+          "median": 0.0,
+          "min": 0.0,
+          "max": 0.52
+        }
+      },
+      "per_env_transition_steps": [
+        {
+          "env_id": 0,
+          "low_entry_step": 125,
+          "low_activation_step": 125,
+          "high_end_entry_step": 223,
+          "high_end_release_step": 226
+        },
+        {
+          "env_id": 1,
+          "low_entry_step": 111,
+          "low_activation_step": 120,
+          "high_end_entry_step": 189,
+          "high_end_release_step": 189
+        },
+        {
+          "env_id": 2,
+          "low_entry_step": 102,
+          "low_activation_step": 117,
+          "high_end_entry_step": 178,
+          "high_end_release_step": 178
+        },
+        {
+          "env_id": 3,
+          "low_entry_step": 117,
+          "low_activation_step": 150,
+          "high_end_entry_step": 188,
+          "high_end_release_step": 188
+        },
+        {
+          "env_id": 4,
+          "low_entry_step": 104,
+          "low_activation_step": 109,
+          "high_end_entry_step": 182,
+          "high_end_release_step": 182
+        },
+        {
+          "env_id": 5,
+          "low_entry_step": 125,
+          "low_activation_step": 125,
+          "high_end_entry_step": 204,
+          "high_end_release_step": 204
+        },
+        {
+          "env_id": 6,
+          "low_entry_step": 120,
+          "low_activation_step": 120,
+          "high_end_entry_step": 195,
+          "high_end_release_step": 201
+        },
+        {
+          "env_id": 7,
+          "low_entry_step": 107,
+          "low_activation_step": 115,
+          "high_end_entry_step": 188,
+          "high_end_release_step": 214
+        },
+        {
+          "env_id": 8,
+          "low_entry_step": 120,
+          "low_activation_step": null,
+          "high_end_entry_step": 195,
+          "high_end_release_step": 195
+        },
+        {
+          "env_id": 9,
+          "low_entry_step": 127,
+          "low_activation_step": 127,
+          "high_end_entry_step": 214,
+          "high_end_release_step": 227
+        },
+        {
+          "env_id": 10,
+          "low_entry_step": 116,
+          "low_activation_step": 153,
+          "high_end_entry_step": 189,
+          "high_end_release_step": 189
+        },
+        {
+          "env_id": 11,
+          "low_entry_step": 105,
+          "low_activation_step": 106,
+          "high_end_entry_step": 185,
+          "high_end_release_step": 185
+        },
+        {
+          "env_id": 12,
+          "low_entry_step": 117,
+          "low_activation_step": null,
+          "high_end_entry_step": 215,
+          "high_end_release_step": 215
+        },
+        {
+          "env_id": 13,
+          "low_entry_step": 114,
+          "low_activation_step": null,
+          "high_end_entry_step": 196,
+          "high_end_release_step": 196
+        },
+        {
+          "env_id": 14,
+          "low_entry_step": 118,
+          "low_activation_step": 118,
+          "high_end_entry_step": 201,
+          "high_end_release_step": 208
+        },
+        {
+          "env_id": 15,
+          "low_entry_step": 109,
+          "low_activation_step": 113,
+          "high_end_entry_step": 192,
+          "high_end_release_step": 192
+        }
+      ]
+    }
+  },
+  "video_dir": null
+}

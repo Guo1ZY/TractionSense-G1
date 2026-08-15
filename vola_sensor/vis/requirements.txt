@@ -1,0 +1,4 @@
+# 已在 Python 3.12.3 / Ubuntu Linux x86_64 上验证
+numpy==2.5.1
+pygame==2.6.1
+bleak==3.0.2

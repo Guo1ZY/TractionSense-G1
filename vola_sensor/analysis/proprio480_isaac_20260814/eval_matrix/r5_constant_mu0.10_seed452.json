@@ -1,0 +1,60 @@
+{
+  "policy": {
+    "kind": "rsl_rl_fastbase_1864",
+    "path": "/home/mosense/guo/unitree_rl_lab/logs/rsl_rl/unitree_g1_29dof_velocity_foot_traction_hall_spatial_cadence_stride_transition_retention_r5/2026-08-13_21-49-48_transition_retention_r5_seed761/model_399.pt",
+    "runner_cfg": "unitree_rl_lab.tasks.locomotion.agents.rsl_rl_ppo_cfg:FootTractionHallSpatialCadenceStrideTransitionRetentionR5PPORunnerCfg",
+    "consumed_observation_dimension": 1864,
+    "environment_observation_dimension": 1864
+  },
+  "mode": "constant",
+  "segments": [
+    {
+      "index": 0,
+      "step_bounds": [
+        0,
+        2000
+      ],
+      "mu": 0.1,
+      "exposure_s": 603.499999999984,
+      "mean_vx_m_s": 0.21531720459461212,
+      "vy_rms_m_s": 0.06662172079086304,
+      "heading_rms_rad": 1.2710543870925903,
+      "omega_rms_rad_s": 0.4007572531700134,
+      "tilt_rms": 0.05562170594930649,
+      "mean_slip_m_s": 0.04143304377794266,
+      "step_frequency_hz": 2.8715824357912942,
+      "mean_stride_length_m": 0.11123058643150442,
+      "mean_step_length_m": 0.05561529321575221
+    }
+  ],
+  "course": {
+    "task": "Unitree-G1-29dof-Velocity-Foot-TractionMagneticMotionStudent-SpatialFrictionCadenceStrideLongDemo",
+    "command_vx_m_s": 0.3,
+    "floor_width_m": 30.0,
+    "success_min_local_x_m": 17.5,
+    "policy_dt_s": 0.02,
+    "episode_length_s": 65.0,
+    "mu_application": "robot_rigid_material_mu * static_patch_1.0 (multiply combine)"
+  },
+  "run": {
+    "seed": 452,
+    "num_envs": 16,
+    "steps": 2000,
+    "metric_warmup_steps": 100
+  },
+  "aggregate": {
+    "fall_event_count": 1,
+    "unique_env_first_fall_count": 1,
+    "survival_completion_count": 15,
+    "course_success_count": 0,
+    "timeout_count": 0,
+    "mean_body_vx_m_s": 0.21531720459461212,
+    "minimum_per_env_mean_vx_m_s": 0.1517539769411087,
+    "body_vy_rms_m_s": 0.06662171334028244,
+    "heading_rms_rad": 1.2710545063018799,
+    "angular_velocity_rms_rad_s": 0.4007572531700134,
+    "tilt_rms": 0.05562170594930649,
+    "earliest_first_fall_s": 35.5,
+    "mean_first_fall_s": 35.5
+  }
+}
