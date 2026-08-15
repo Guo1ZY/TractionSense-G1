@@ -1,0 +1,1 @@
+/home/mosense/guo/unitree_rl_lab/logs/rsl_rl/unitree_g1_29dof_velocity_foot_traction_teacher_robust_shoulder_recovery/2026-07-21_18-39-21_high_mu_transient_recovery_from_7775/model_7890.pt

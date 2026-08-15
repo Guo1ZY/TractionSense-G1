@@ -1,0 +1,127 @@
+joint_ids_map: [0, 6, 12, 1, 7, 13, 2, 8, 14, 3, 9, 15, 22, 4, 10, 16, 23, 5, 11,
+  17, 24, 18, 25, 19, 26, 20, 27, 21, 28]
+step_dt: 0.02
+stiffness: [100.0, 100.0, 100.0, 150.0, 40.0, 40.0, 100.0, 100.0, 100.0, 150.0, 40.0,
+  40.0, 200.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0,
+  40.0, 40.0, 40.0, 40.0]
+damping: [2.0, 2.0, 2.0, 4.0, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0, 2.0, 2.0, 5.0, 5.0, 5.0,
+  1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+default_joint_pos: [-0.1, -0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3,
+  0.3, -0.2, -0.2, 0.25, -0.25, 0.0, 0.0, 0.0, 0.0, 0.97, 0.97, 0.15, -0.15, 0.0,
+  0.0, 0.0, 0.0]
+commands:
+  base_velocity:
+    # Simulation-verified candidate envelope.  The Hall governor is
+    # deliberately OFF in the artifact and must be enabled only after live
+    # F0M1 preflight.  Hall channels are magnetic Bx/By/Bz response only.
+    ranges:
+      lin_vel_x: [-0.3, 0.6]
+      lin_vel_y: [-0.2, 0.2]
+      ang_vel_z: [-0.6, 0.6]
+      heading: null
+    traction_governor:
+      enabled: false
+      mode: auto
+      lock_lateral_yaw: false
+      low_speed_limit: 0.22
+      high_speed_limit: 0.60
+      critical_speed_limit: 0.0
+      low_lateral_limit: 0.05
+      high_lateral_limit: 0.35
+      low_yaw_limit: 0.15
+      high_yaw_limit: 0.80
+      accel_rate: 1.50
+      decel_rate: 1.00
+      probability_low_enter: 0.65
+      probability_high_enter: 0.55
+      probability_critical_enter: 0.95
+      critical_hold_s: 0.04
+      probability_ema_alpha: 0.20
+      state_reference_ema_alpha: 0.002
+      relative_low_rise: 0.20
+      relative_high_drop: 0.20
+      low_hold_s: 0.10
+      high_hold_s: 0.10
+      feedback_timeout_s: 0.25
+      min_detection_command: 0.20
+      startup_command_threshold: 0.02
+      warmup_s: 0.20
+      probe_s: 1.60
+      probe_speed_limit: 0.50
+      low_reprobe_s: 10.00
+      probe_relative_clear_drop: 0.20
+      crawl_pulse_s: 0.45
+      crawl_min_hold_s: 0.25
+      launch_accel_rate: 1.50
+      tracking_low_enter: 0.55
+      tracking_high_enter: 0.30
+actions:
+  JointPositionAction:
+    clip: null
+    joint_names: [.*]
+    scale: [0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+      0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25,
+      0.25, 0.25, 0.25, 0.25]
+    offset: [-0.1, -0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3, 0.3, -0.2,
+      -0.2, 0.25, -0.25, 0.0, 0.0, 0.0, 0.0, 0.97, 0.97, 0.15, -0.15, 0.0, 0.0, 0.0,
+      0.0]
+    min_delay: 0
+    max_delay: 2
+    raw_clip: [-4.0, 4.0]
+    delay_probabilities: !!python/tuple [0.15, 0.15, 0.7]
+    joint_ids: null
+observations:
+  base_ang_vel:
+    params: {}
+    clip: null
+    scale: [0.2, 0.2, 0.2]
+    history_length: 5
+  projected_gravity:
+    params: {}
+    clip: null
+    scale: [1.0, 1.0, 1.0]
+    history_length: 5
+  velocity_commands:
+    params: {command_name: base_velocity}
+    clip: null
+    scale: [1.0, 1.0, 1.0]
+    history_length: 5
+  joint_pos_rel:
+    params: {}
+    clip: null
+    scale: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+      1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    history_length: 5
+  joint_vel_rel:
+    params: {}
+    clip: null
+    scale: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
+      0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
+      0.05, 0.05, 0.05, 0.05]
+    history_length: 5
+  last_action:
+    params: {}
+    clip: null
+    scale: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+      1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    history_length: 5
+  foot_magnetic_array:
+    params: {}
+    clip: [-6.0, 6.0]
+    scale: null
+    history_length: 15
+  foot_sample_period_lr:
+    params: {}
+    clip: [0.001, 0.25]
+    scale: null
+    history_length: 15
+  foot_sensor_valid_lr:
+    params: {}
+    clip: [0.0, 1.0]
+    scale: null
+    history_length: 1
+  lateral_motion_feedback:
+    params: {}
+    clip: [-1.5, 1.5]
+    scale: null
+    history_length: 1

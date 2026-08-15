@@ -1,0 +1,260 @@
+{
+  "status": "PASS",
+  "measurement_boundary": "Hall Bx/By/Bz and proprioception are the only runtime observations; there is no Hall-to-force/friction inverse",
+  "train_samples": 42410,
+  "test_samples": 6534,
+  "nominal": {
+    "samples": 6534,
+    "mae": 0.059203147888183594,
+    "base_mae": 0.06278100609779358,
+    "active_samples": 1748,
+    "active_mae": 0.054821982979774475,
+    "active_base_mae": 0.06819596886634827,
+    "active_improvement_fraction": 0.19611109144565977,
+    "low_mu_mae": 0.06242254748940468,
+    "low_mu_base_mae": 0.06586305052042007,
+    "clear_base_difference_max": 0.0,
+    "correction_abs_mean": 0.009730100631713867,
+    "correction_abs_max": 0.15000000596046448,
+    "risk_mean": 0.32094764709472656,
+    "finite": true
+  },
+  "randomized": {
+    "samples": 6534,
+    "mae": 0.06131847947835922,
+    "base_mae": 0.06463409215211868,
+    "active_samples": 1994,
+    "active_mae": 0.06205183267593384,
+    "active_base_mae": 0.07291647046804428,
+    "active_improvement_fraction": 0.14900114778418797,
+    "low_mu_mae": 0.0641665831208229,
+    "low_mu_base_mae": 0.06752167642116547,
+    "clear_base_difference_max": 0.0,
+    "correction_abs_mean": 0.009121313691139221,
+    "correction_abs_max": 0.15000000596046448,
+    "risk_mean": 0.35834693908691406,
+    "finite": true
+  },
+  "fault_fallback_max": 0.0,
+  "fault_correction_max": 0.0,
+  "fault_risk_min": 1.0,
+  "onnx_max_difference": 8.58306884765625e-06,
+  "gates": {
+    "nominal_active_improvement": true,
+    "randomized_active_improvement": true,
+    "clear_state_exact_preservation": true,
+    "bounded_correction": true,
+    "fault_exact_fallback": true,
+    "fault_is_conservative": true,
+    "onnx_parity": true,
+    "finite": true
+  },
+  "configuration": {
+    "correction_limit": 0.15,
+    "risk_gate_start": 0.55,
+    "risk_gate_full": 0.8,
+    "epochs": 45,
+    "seed": 20260808,
+    "risk_model_variant": "baseline_invariant"
+  },
+  "sources": {
+    "train": [
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round6_switch_aggregate_data/train.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_continuation/isaac_r25_closedloop_dagger_seed105.npz"
+    ],
+    "test": [
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round6_switch_aggregate_data/test.npz"
+    ],
+    "base_policy": "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/layout_magnetic_physical_round4_low_speed_observability/layout_magnetic_student.pt",
+    "risk_checkpoint": "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_continuation/hall_risk_round25_active_crosssim/hall_risk_estimator.pt",
+    "teacher_onnx": "/home/mosense/guo/unitree_rl_lab/logs/imported_remote_20260728/teacher_8110.onnx"
+  },
+  "artifacts": {
+    "checkpoint": "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_continuation/hall_recovery_round26_r25_features/hall_recovery_policy.pt",
+    "checkpoint_sha256": "b0abca117375a5e72294a83b9bba7c5a4cbd367a9c43340f8d8b502a108d18df",
+    "onnx": "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_continuation/hall_recovery_round26_r25_features/policy.onnx",
+    "onnx_sha256": "cefc87e46d3a2e8a8bbca61f908c92b3c8932d3119ec9e31928d5eafdeea98c0"
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "loss": 0.03838575085753738
+    },
+    {
+      "epoch": 2,
+      "loss": 0.036121666302478025
+    },
+    {
+      "epoch": 3,
+      "loss": 0.0349930563364929
+    },
+    {
+      "epoch": 4,
+      "loss": 0.03345556978151234
+    },
+    {
+      "epoch": 5,
+      "loss": 0.032396781476523286
+    },
+    {
+      "epoch": 6,
+      "loss": 0.03223921553519671
+    },
+    {
+      "epoch": 7,
+      "loss": 0.03265194970445935
+    },
+    {
+      "epoch": 8,
+      "loss": 0.03187548676503489
+    },
+    {
+      "epoch": 9,
+      "loss": 0.030715303205742474
+    },
+    {
+      "epoch": 10,
+      "loss": 0.030575069404419963
+    },
+    {
+      "epoch": 11,
+      "loss": 0.03064039283465226
+    },
+    {
+      "epoch": 12,
+      "loss": 0.029949659721359725
+    },
+    {
+      "epoch": 13,
+      "loss": 0.030286808876925496
+    },
+    {
+      "epoch": 14,
+      "loss": 0.028999959646362483
+    },
+    {
+      "epoch": 15,
+      "loss": 0.030380924630614137
+    },
+    {
+      "epoch": 16,
+      "loss": 0.02846953084148191
+    },
+    {
+      "epoch": 17,
+      "loss": 0.028236708130825384
+    },
+    {
+      "epoch": 18,
+      "loss": 0.02878919973199982
+    },
+    {
+      "epoch": 19,
+      "loss": 0.028755849546168076
+    },
+    {
+      "epoch": 20,
+      "loss": 0.028220674627370722
+    },
+    {
+      "epoch": 21,
+      "loss": 0.027947029739572624
+    },
+    {
+      "epoch": 22,
+      "loss": 0.027877272244044786
+    },
+    {
+      "epoch": 23,
+      "loss": 0.02811458968135566
+    },
+    {
+      "epoch": 24,
+      "loss": 0.02693823791892777
+    },
+    {
+      "epoch": 25,
+      "loss": 0.02841448405697376
+    },
+    {
+      "epoch": 26,
+      "loss": 0.027431784087273346
+    },
+    {
+      "epoch": 27,
+      "loss": 0.027504994918738746
+    },
+    {
+      "epoch": 28,
+      "loss": 0.027671608180281998
+    },
+    {
+      "epoch": 29,
+      "loss": 0.028966590265930754
+    },
+    {
+      "epoch": 30,
+      "loss": 0.026342785405511143
+    },
+    {
+      "epoch": 31,
+      "loss": 0.02630679195615459
+    },
+    {
+      "epoch": 32,
+      "loss": 0.027634234957008733
+    },
+    {
+      "epoch": 33,
+      "loss": 0.026953168552253808
+    },
+    {
+      "epoch": 34,
+      "loss": 0.027356451405381375
+    },
+    {
+      "epoch": 35,
+      "loss": 0.026596559723806226
+    },
+    {
+      "epoch": 36,
+      "loss": 0.026090745553655377
+    },
+    {
+      "epoch": 37,
+      "loss": 0.0264172476894435
+    },
+    {
+      "epoch": 38,
+      "loss": 0.026720518564712716
+    },
+    {
+      "epoch": 39,
+      "loss": 0.025985000420873865
+    },
+    {
+      "epoch": 40,
+      "loss": 0.02664107966169353
+    },
+    {
+      "epoch": 41,
+      "loss": 0.026806417794841497
+    },
+    {
+      "epoch": 42,
+      "loss": 0.02598130064771595
+    },
+    {
+      "epoch": 43,
+      "loss": 0.025826055659835447
+    },
+    {
+      "epoch": 44,
+      "loss": 0.02613603429589047
+    },
+    {
+      "epoch": 45,
+      "loss": 0.025598643174224996
+    }
+  ]
+}

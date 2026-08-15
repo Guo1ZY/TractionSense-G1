@@ -1,0 +1,267 @@
+{
+  "status": "trained_sim_hall_slip_risk_estimator",
+  "overall": "PASS",
+  "model_variant": "slip_aware_invariant",
+  "trailing_feature_mode": "motion_feedback",
+  "measurement_boundary": "Hall Bx/By/Bz and proprioception are the only runtime inputs; there is no Hall-to-force or Hall-to-friction inverse",
+  "offline_label": {
+    "definition": "future sustained contact-point slip or fall",
+    "horizon_steps": 12,
+    "pre_fall_steps": 30,
+    "slip_threshold_m_s": 0.2,
+    "slip_quantile": 0.75,
+    "operating_threshold": 0.45
+  },
+  "train_samples": 38106,
+  "test_samples": 19060,
+  "nominal": {
+    "samples": 19060,
+    "positive_fraction": 0.38174186778593916,
+    "mae": 0.167392298579216,
+    "brier": 0.061160389333963394,
+    "auc": 0.909075220610162,
+    "prospective_risk_recall": 0.8798790544255085,
+    "safe_false_alarm_rate": 0.06697459584295612,
+    "mean_risk_positive": 0.8087852597236633,
+    "mean_risk_safe": 0.1916579157114029,
+    "finite": true
+  },
+  "randomized": {
+    "samples": 19060,
+    "positive_fraction": 0.38174186778593916,
+    "mae": 0.1851806342601776,
+    "brier": 0.07468978315591812,
+    "auc": 0.8877483975345853,
+    "prospective_risk_recall": 0.8615997800989554,
+    "safe_false_alarm_rate": 0.12009237875288684,
+    "mean_risk_positive": 0.7939533591270447,
+    "mean_risk_safe": 0.22878038883209229,
+    "finite": true
+  },
+  "fault_risk_min": 1.0,
+  "onnx_parity_max_abs": 5.066394805908203e-07,
+  "onnx_parity_tolerance": 3e-05,
+  "gates": {
+    "finite": true,
+    "nominal_auc_ge_0p85": true,
+    "nominal_risk_recall_ge_0p85": true,
+    "randomized_risk_recall_ge_0p75": true,
+    "sensor_loss_maps_to_risk_one": true,
+    "onnx_parity": true
+  },
+  "checkpoint": "/home/mosense/guo/unitree_rl_lab/artifacts/hall_speed_demo/stage6_hall_risk_20260810/slip_risk_future024s_operating045/hall_slip_risk_estimator.pt",
+  "checkpoint_sha256": "1ebbc23c765ab40f119bce2bbbca1c4d9c6b88ca9177cebf32358c3b9a1951d7",
+  "onnx": "/home/mosense/guo/unitree_rl_lab/artifacts/hall_speed_demo/stage6_hall_risk_20260810/slip_risk_future024s_operating045/hall_slip_risk.onnx",
+  "onnx_sha256": "0f5da874e0c527ed1daebf25cb0a239347a784bb1e3dc7dacf485aa1a44dc761",
+  "sources": {
+    "train": [
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_speed_demo/stage6_hall_risk_20260810/train_seed370.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_speed_demo/stage6_hall_risk_20260810/train_seed371.npz"
+    ],
+    "test": [
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_speed_demo/stage6_hall_risk_20260810/test_seed372.npz"
+    ]
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "loss": 0.5724736430735962
+    },
+    {
+      "epoch": 2,
+      "loss": 0.48442645982476423
+    },
+    {
+      "epoch": 3,
+      "loss": 0.46096939892272826
+    },
+    {
+      "epoch": 4,
+      "loss": 0.4509700701045019
+    },
+    {
+      "epoch": 5,
+      "loss": 0.45394421144964087
+    },
+    {
+      "epoch": 6,
+      "loss": 0.43632586200500184
+    },
+    {
+      "epoch": 7,
+      "loss": 0.43079364927010366
+    },
+    {
+      "epoch": 8,
+      "loss": 0.42467293257926797
+    },
+    {
+      "epoch": 9,
+      "loss": 0.41385181022711465
+    },
+    {
+      "epoch": 10,
+      "loss": 0.40966634156947584
+    },
+    {
+      "epoch": 11,
+      "loss": 0.4079850190881981
+    },
+    {
+      "epoch": 12,
+      "loss": 0.4014908540394652
+    },
+    {
+      "epoch": 13,
+      "loss": 0.4055750948959953
+    },
+    {
+      "epoch": 14,
+      "loss": 0.3984962391730075
+    },
+    {
+      "epoch": 15,
+      "loss": 0.394611353950038
+    },
+    {
+      "epoch": 16,
+      "loss": 0.39382600736750684
+    },
+    {
+      "epoch": 17,
+      "loss": 0.3894035638345356
+    },
+    {
+      "epoch": 18,
+      "loss": 0.3854359716970026
+    },
+    {
+      "epoch": 19,
+      "loss": 0.382772809139407
+    },
+    {
+      "epoch": 20,
+      "loss": 0.3811842161376652
+    },
+    {
+      "epoch": 21,
+      "loss": 0.38164086962649685
+    },
+    {
+      "epoch": 22,
+      "loss": 0.38131008604996497
+    },
+    {
+      "epoch": 23,
+      "loss": 0.37586797261960125
+    },
+    {
+      "epoch": 24,
+      "loss": 0.37638231826155155
+    },
+    {
+      "epoch": 25,
+      "loss": 0.37528081311238803
+    },
+    {
+      "epoch": 26,
+      "loss": 0.37315782091564154
+    },
+    {
+      "epoch": 27,
+      "loss": 0.3720727163537909
+    },
+    {
+      "epoch": 28,
+      "loss": 0.36990406942675386
+    },
+    {
+      "epoch": 29,
+      "loss": 0.3741430208835428
+    },
+    {
+      "epoch": 30,
+      "loss": 0.36896070563617367
+    },
+    {
+      "epoch": 31,
+      "loss": 0.3645629224464761
+    },
+    {
+      "epoch": 32,
+      "loss": 0.3644193405961888
+    },
+    {
+      "epoch": 33,
+      "loss": 0.3664413263123536
+    },
+    {
+      "epoch": 34,
+      "loss": 0.3632491541970579
+    },
+    {
+      "epoch": 35,
+      "loss": 0.36104423765910176
+    },
+    {
+      "epoch": 36,
+      "loss": 0.36343079179858545
+    },
+    {
+      "epoch": 37,
+      "loss": 0.35976965632900654
+    },
+    {
+      "epoch": 38,
+      "loss": 0.3579544364555122
+    },
+    {
+      "epoch": 39,
+      "loss": 0.3608460635492722
+    },
+    {
+      "epoch": 40,
+      "loss": 0.3584151106535065
+    },
+    {
+      "epoch": 41,
+      "loss": 0.35543468280463736
+    },
+    {
+      "epoch": 42,
+      "loss": 0.3591312898811453
+    },
+    {
+      "epoch": 43,
+      "loss": 0.35901016867868435
+    },
+    {
+      "epoch": 44,
+      "loss": 0.35923136833839914
+    },
+    {
+      "epoch": 45,
+      "loss": 0.35814311394496007
+    },
+    {
+      "epoch": 46,
+      "loss": 0.3566891016693858
+    },
+    {
+      "epoch": 47,
+      "loss": 0.35551318318701314
+    },
+    {
+      "epoch": 48,
+      "loss": 0.355494141541134
+    },
+    {
+      "epoch": 49,
+      "loss": 0.35782316355093857
+    },
+    {
+      "epoch": 50,
+      "loss": 0.3601449714309868
+    }
+  ]
+}

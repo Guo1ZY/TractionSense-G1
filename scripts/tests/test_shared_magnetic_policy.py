@@ -7,10 +7,7 @@ from pathlib import Path
 import torch
 
 
-SCRIPT = (
-    Path(__file__).resolve().parents[2]
-    / "research_scripts/train_shared_magnetic_policy.py"
-)
+SCRIPT = Path(__file__).resolve().parents[3] / "scripts/train_shared_magnetic_policy.py"
 sys.path.insert(0, str(SCRIPT.parent))
 SPEC = importlib.util.spec_from_file_location("shared_magnetic", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -36,3 +33,4 @@ def test_proxy_contains_independent_health_slots() -> None:
     assert converted.shape == (2, 1864)
     assert torch.all(converted[:, -4:-2] == 1.0)
     assert torch.all(converted[:, -2:] == 0.0)
+

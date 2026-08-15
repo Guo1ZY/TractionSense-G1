@@ -11,6 +11,12 @@ from isaaclab.assets import Articulation, RigidObject
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensor
 
+from .spatial_friction_state import (
+    SPATIAL_LOW,
+    capture_speed_envelope,
+    transition_stage_heading_weight,
+)
+
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
@@ -516,6 +522,82 @@ def accumulated_slip_step(
     return torch.clamp(slip_speed * step_dt, 0.0, 0.5)
 
 
+def contact_point_tangential_slip_penalty(
+    env: ManagerBasedRLEnv,
+    left_contact_sensor_cfg: SceneEntityCfg,
+    right_contact_sensor_cfg: SceneEntityCfg,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    min_normal_force_n: float = 5.0,
+    speed_deadband_m_s: float = 0.025,
+    speed_clip_m_s: float = 1.5,
+    squared: bool = True,
+) -> torch.Tensor:
+    """Penalize true rigid-foot contact-point tangential speed on static ground.
+
+    Unlike the historical ankle-link-origin velocity proxy, this evaluates
+    ``v_contact = v_COM + omega x (p_contact - p_COM)`` and removes the normal
+    component at each dedicated filtered contact.  It is simulator-only reward
+    supervision; no force, contact point, slip value or validity flag enters
+    the Hall actor observation.
+
+    No-contact rows return zero.  Malformed/missing dedicated buffers fail
+    closed rather than being interpreted as safe zero-slip motion.
+    """
+
+    if speed_deadband_m_s < 0.0 or speed_clip_m_s <= speed_deadband_m_s:
+        raise ValueError("invalid contact-point slip deadband/clip")
+    asset: Articulation = env.scene[asset_cfg.name]
+    body_ids = asset_cfg.body_ids
+    if body_ids is None or len(body_ids) != 2:
+        raise RuntimeError("asset_cfg must resolve left then right foot bodies")
+    body_com_pos_w = asset.data.body_com_pos_w[:, body_ids, :]
+    body_com_lin_vel_w = asset.data.body_com_lin_vel_w[:, body_ids, :]
+    body_com_ang_vel_w = asset.data.body_com_ang_vel_w[:, body_ids, :]
+
+    positions: list[torch.Tensor] = []
+    normal_forces: list[torch.Tensor] = []
+    for side, sensor_cfg in (
+        ("left", left_contact_sensor_cfg),
+        ("right", right_contact_sensor_cfg),
+    ):
+        sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+        data = sensor.data
+        if data.contact_pos_w is None or data.force_matrix_w is None:
+            raise RuntimeError(
+                f"{side} contact-point slip reward requires a dedicated filtered "
+                "ContactSensor with track_contact_points=True"
+            )
+        if data.contact_pos_w.shape[1] != 1 or data.force_matrix_w.shape[1] != 1:
+            raise RuntimeError(
+                f"{side} contact-point slip ContactSensor must resolve exactly one foot body"
+            )
+        positions.append(data.contact_pos_w)
+        normal_forces.append(data.force_matrix_w)
+
+    # Local import keeps the Isaac-independent kinematics helper reusable by
+    # evaluators and CPU tests without making the traction package depend on
+    # manager-based environment modules.
+    from unitree_rl_lab.traction.contact_slip import (
+        static_ground_contact_point_tangential_speed,
+    )
+
+    result = static_ground_contact_point_tangential_speed(
+        body_com_pos_w,
+        body_com_lin_vel_w,
+        body_com_ang_vel_w,
+        positions,
+        normal_forces,
+        min_normal_force_n=min_normal_force_n,
+    )
+    slip = torch.clamp(
+        result.speed_per_env,
+        min=0.0,
+        max=float(speed_clip_m_s),
+    )
+    excess = torch.relu(slip - float(speed_deadband_m_s))
+    return torch.square(excess) if squared else excess
+
+
 def lateral_slip_penalty(
     env: ManagerBasedRLEnv,
     command_name: str = "base_velocity",
@@ -631,6 +713,189 @@ def traction_limited_track_lin_vel_x_exp(
     return torch.exp(-err / (std**2 + 1e-8))
 
 
+def spatial_stage_track_lin_vel_x_exp(
+    env: ManagerBasedRLEnv,
+    std: float,
+    command_name: str = "base_velocity",
+    low_speed: float = 0.25,
+    high_speed: float = 0.80,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Track a causal H-L-H speed target using privileged reward state only.
+
+    Stage value 1 is the latched LOW state from real filtered patch contact.
+    The stage never enters the 1864-D actor observation; Hall/proprio history
+    must still explain when the actor should change gait.
+    """
+    if not hasattr(env, "spatial_course_stage_buf"):
+        raise RuntimeError("spatial_stage_track requires spatial course state")
+    asset: Articulation = env.scene[asset_cfg.name]
+    command = torch.abs(env.command_manager.get_command(command_name)[:, 0])
+    low = env.spatial_course_stage_buf == 1
+    cap = torch.where(
+        low,
+        torch.full_like(command, float(low_speed)),
+        torch.full_like(command, float(high_speed)),
+    )
+    target = torch.minimum(command, cap)
+    error = torch.square(target - asset.data.root_lin_vel_b[:, 0])
+    return torch.exp(-error / (float(std) ** 2 + 1e-8))
+
+
+def spatial_stage_overspeed_penalty(
+    env: ManagerBasedRLEnv,
+    command_name: str = "base_velocity",
+    low_speed: float = 0.25,
+    high_speed: float = 0.80,
+    tolerance: float = 0.04,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Quadratic overspeed penalty with an exact latched LOW target."""
+    if not hasattr(env, "spatial_course_stage_buf"):
+        raise RuntimeError("spatial_stage_overspeed requires spatial course state")
+    asset: Articulation = env.scene[asset_cfg.name]
+    command = torch.abs(env.command_manager.get_command(command_name)[:, 0])
+    low = env.spatial_course_stage_buf == 1
+    cap = torch.where(
+        low,
+        torch.full_like(command, float(low_speed)),
+        torch.full_like(command, float(high_speed)),
+    )
+    target = torch.minimum(command, cap)
+    excess = torch.relu(torch.abs(asset.data.root_lin_vel_b[:, 0]) - target - float(tolerance))
+    return torch.square(excess)
+
+
+def spatial_low_capture_envelope_penalty(
+    env: ManagerBasedRLEnv,
+    target_speed: float = 0.24,
+    deadline_s: float = 0.90,
+    tolerance: float = 0.03,
+    decay_power: float = 1.0,
+    excess_clip: float = 1.0,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize speed above a causal post-contact deceleration envelope.
+
+    The envelope begins at the measured speed on the first filtered LOW-patch
+    contact and reaches ``target_speed`` at ``deadline_s``. All state consumed
+    here is privileged reward bookkeeping; none is added to actor observations.
+    """
+
+    required = (
+        "spatial_course_stage_buf",
+        "spatial_low_elapsed_s_buf",
+        "spatial_low_entry_speed_buf",
+    )
+    if any(not hasattr(env, name) for name in required):
+        raise RuntimeError("spatial capture envelope requires initialized course state")
+    if tolerance < 0.0 or excess_clip <= 0.0:
+        raise ValueError("tolerance must be non-negative and excess_clip positive")
+
+    asset: Articulation = env.scene[asset_cfg.name]
+    speed = torch.abs(
+        torch.nan_to_num(
+            asset.data.root_lin_vel_b[:, 0],
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+    )
+    envelope = capture_speed_envelope(
+        env.spatial_low_elapsed_s_buf,
+        env.spatial_low_entry_speed_buf,
+        target_speed=float(target_speed),
+        deadline_s=float(deadline_s),
+        decay_power=float(decay_power),
+    )
+    excess = torch.clamp(
+        torch.relu(speed - envelope - float(tolerance)),
+        max=float(excess_clip),
+    )
+    low = env.spatial_course_stage_buf == SPATIAL_LOW
+    return torch.square(excess) * low.to(excess.dtype)
+
+
+def spatial_low_capture_reward(
+    env: ManagerBasedRLEnv,
+    target_speed: float = 0.24,
+    speed_tolerance: float = 0.05,
+    deadline_s: float = 0.90,
+    progress_bonus: float = 0.50,
+    hold_bonus: float = 1.00,
+    timely_completion_bonus: float = 12.0,
+    late_completion_bonus: float = 2.0,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward deceleration progress, stable capture and timely completion.
+
+    A small dense term supplies gradient before the stable-speed condition is
+    met. The completion pulse is emitted once, and the hold term remains active
+    only while physically in LOW; capture therefore cannot replace traversal of
+    the final HighEnd patch or create an early successful truncation.
+    """
+
+    required = (
+        "spatial_course_stage_buf",
+        "spatial_low_entry_speed_buf",
+        "spatial_low_capture_success_buf",
+        "spatial_low_capture_new_success_buf",
+        "spatial_low_capture_elapsed_s_buf",
+    )
+    if any(not hasattr(env, name) for name in required):
+        raise RuntimeError("spatial capture reward requires initialized course state")
+    if target_speed < 0.0 or speed_tolerance < 0.0 or deadline_s <= 0.0:
+        raise ValueError("invalid spatial capture reward parameters")
+
+    asset: Articulation = env.scene[asset_cfg.name]
+    speed = torch.abs(
+        torch.nan_to_num(
+            asset.data.root_lin_vel_b[:, 0],
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+    )
+    entry_speed = torch.maximum(
+        torch.nan_to_num(
+            env.spatial_low_entry_speed_buf,
+            nan=float(target_speed),
+            posinf=float(target_speed),
+            neginf=float(target_speed),
+        ),
+        torch.full_like(speed, float(target_speed)),
+    )
+    initial_gap = torch.relu(entry_speed - float(target_speed))
+    remaining_gap = torch.relu(speed - float(target_speed))
+    progress = torch.where(
+        initial_gap > 1.0e-4,
+        torch.clamp(1.0 - remaining_gap / torch.clamp(initial_gap, min=1.0e-4), 0.0, 1.0),
+        (speed <= float(target_speed + speed_tolerance)).to(speed.dtype),
+    )
+
+    low = env.spatial_course_stage_buf == SPATIAL_LOW
+    captured = env.spatial_low_capture_success_buf & low
+    new_capture = env.spatial_low_capture_new_success_buf & low
+    capture_time = env.spatial_low_capture_elapsed_s_buf
+    timely = new_capture & torch.isfinite(capture_time) & (
+        capture_time <= float(deadline_s)
+    )
+    completion = torch.where(
+        timely,
+        torch.full_like(speed, float(timely_completion_bonus)),
+        torch.where(
+            new_capture,
+            torch.full_like(speed, float(late_completion_bonus)),
+            torch.zeros_like(speed),
+        ),
+    )
+    return (
+        float(progress_bonus) * progress * low.to(speed.dtype)
+        + float(hold_bonus) * captured.to(speed.dtype)
+        + completion
+    )
+
+
 def traction_overspeed_penalty(
     env: ManagerBasedRLEnv,
     command_name: str,
@@ -737,6 +1002,84 @@ def friction_cone_margin_penalty(
     return excess.sum(dim=1) / contact.sum(dim=1).clamp(min=1e-3)
 
 
+def filtered_contact_friction_cone_margin_penalty(
+    env: ManagerBasedRLEnv,
+    left_contact_sensor_cfg: SceneEntityCfg,
+    right_contact_sensor_cfg: SceneEntityCfg,
+    safe_utilization: float = 0.75,
+    force_threshold: float = 5.0,
+    soft_scale: float = 0.5,
+    force_eps: float = 5.0,
+    utilization_clip: float = 3.0,
+) -> torch.Tensor:
+    """Penalize friction-cone use from dedicated normal and friction streams.
+
+    Isaac Lab's ``net_forces_w`` contains *normal force only*.  Consequently
+    the legacy reward above cannot recover tangential utilization from that
+    tensor.  This isolated variant requires the two dedicated Hall contact
+    sensors, reads filtered normal forces from ``force_matrix_w`` and actual
+    tangential forces from ``friction_forces_w``, and sums force magnitudes
+    over all physical floor filters for each foot.
+
+    The result is privileged reward supervision only.  Neither force stream,
+    true friction nor the utilization value is added to the 1864-D actor.
+    Missing buffers and malformed shapes fail closed instead of becoming a
+    silent zero penalty.
+    """
+
+    if not 0.0 <= safe_utilization < utilization_clip:
+        raise ValueError("safe_utilization must be in [0, utilization_clip)")
+    if force_threshold < 0.0 or soft_scale <= 0.0 or force_eps <= 0.0:
+        raise ValueError("invalid filtered friction-cone reward parameters")
+
+    normal_per_foot: list[torch.Tensor] = []
+    tangent_per_foot: list[torch.Tensor] = []
+    for side, sensor_cfg in (
+        ("left", left_contact_sensor_cfg),
+        ("right", right_contact_sensor_cfg),
+    ):
+        sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+        normal = sensor.data.force_matrix_w
+        tangent = sensor.data.friction_forces_w
+        if normal is None or tangent is None:
+            raise RuntimeError(
+                f"{side} filtered friction-cone reward requires a ContactSensor "
+                "with floor filters and track_friction_forces=True"
+            )
+        if normal.ndim != 4 or tangent.ndim != 4 or normal.shape != tangent.shape:
+            raise RuntimeError(
+                f"{side} normal/friction buffers must have identical [N,B,M,3] "
+                f"shape, got {tuple(normal.shape)} and {tuple(tangent.shape)}"
+            )
+        if normal.shape[0] != env.num_envs or normal.shape[1] != 1 or normal.shape[-1] != 3:
+            raise RuntimeError(
+                f"{side} dedicated sensor must resolve [num_envs,1,filters,3], "
+                f"got {tuple(normal.shape)}"
+            )
+        # A missing filter pair is reported as NaN by ContactSensorData.  It
+        # contributes no force; non-finite values elsewhere remain detectable
+        # through the explicit finite assertion below.
+        normal_clean = torch.nan_to_num(normal, nan=0.0)
+        tangent_clean = torch.nan_to_num(tangent, nan=0.0)
+        if not torch.isfinite(normal_clean).all() or not torch.isfinite(tangent_clean).all():
+            raise RuntimeError(f"{side} contact force buffers contain Inf")
+        normal_per_foot.append(torch.linalg.norm(normal_clean, dim=-1).sum(dim=2).squeeze(1))
+        tangent_per_foot.append(torch.linalg.norm(tangent_clean, dim=-1).sum(dim=2).squeeze(1))
+
+    fn = torch.stack(normal_per_foot, dim=1)
+    ft = torch.stack(tangent_per_foot, dim=1)
+    if hasattr(env, "ground_friction_mu_buf"):
+        mu = env.ground_friction_mu_buf[:, None].to(device=fn.device, dtype=fn.dtype)
+    else:
+        mu = torch.full((env.num_envs, 1), 0.8, device=fn.device, dtype=fn.dtype)
+    if not torch.isfinite(mu).all() or torch.any(mu <= 0.0):
+        raise RuntimeError("ground friction buffer must be finite and positive")
+    utilization = torch.clamp(ft / (mu * fn + force_eps), 0.0, utilization_clip)
+    contact = torch.sigmoid((fn - force_threshold) * soft_scale)
+    excess = torch.square(torch.relu(utilization - safe_utilization)) * contact
+    return excess.sum(dim=1) / contact.sum(dim=1).clamp(min=1.0e-3)
+
+
 def straight_line_motion_penalty(
     env: ManagerBasedRLEnv,
     command_name: str = "base_velocity",
@@ -806,6 +1149,296 @@ def straight_cross_track_error(
     cmd_x = torch.abs(env.command_manager.get_command(command_name)[:, 0])
     active = (cmd_x > cmd_x_threshold).float()
     return active * torch.square(cross_track)
+
+
+def straight_heading_error_penalty(
+    env: ManagerBasedRLEnv,
+    command_name: str = "base_velocity",
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    cmd_x_threshold: float = 0.10,
+    yaw_command_threshold: float = 0.05,
+    error_clip: float = 1.0,
+) -> torch.Tensor:
+    """Squared accumulated heading error relative to the episode reset pose.
+
+    Penalizing yaw rate alone permits a small bias to integrate into a large
+    heading error while the instantaneous rate has already returned to zero.
+    This term stores the reset body-X direction, computes the signed planar
+    angle with ``atan2(cross, dot)``, and is invariant to randomized world yaw.
+    It is active only for forward, near-zero-yaw commands; a future general
+    turning task must compare against integrated commanded heading instead.
+    """
+
+    if error_clip <= 0.0:
+        raise ValueError("error_clip must be positive")
+    if cmd_x_threshold < 0.0 or yaw_command_threshold < 0.0:
+        raise ValueError("command thresholds must be non-negative")
+    asset: Articulation = env.scene[asset_cfg.name]
+    quat = asset.data.root_quat_w
+    heading = torch.stack(
+        (
+            1.0 - 2.0 * (torch.square(quat[:, 2]) + torch.square(quat[:, 3])),
+            2.0 * (quat[:, 1] * quat[:, 2] + quat[:, 0] * quat[:, 3]),
+        ),
+        dim=-1,
+    )
+    heading = heading / torch.linalg.vector_norm(
+        heading, dim=1, keepdim=True
+    ).clamp(min=1.0e-6)
+    needs_init = (
+        not hasattr(env, "straight_heading_reference_xy")
+        or env.straight_heading_reference_xy.shape != heading.shape
+    )
+    if needs_init:
+        env.straight_heading_reference_xy = heading.clone()
+        env.straight_heading_initialized = torch.zeros(
+            env.num_envs, device=env.device, dtype=torch.bool
+        )
+    reset = (env.episode_length_buf <= 1) | (~env.straight_heading_initialized)
+    if reset.any():
+        env.straight_heading_reference_xy[reset] = heading[reset]
+        env.straight_heading_initialized[reset] = True
+
+    reference = env.straight_heading_reference_xy
+    cross = reference[:, 0] * heading[:, 1] - reference[:, 1] * heading[:, 0]
+    dot = torch.sum(reference * heading, dim=-1).clamp(-1.0, 1.0)
+    error = torch.atan2(cross, dot).clamp(-error_clip, error_clip)
+    command = env.command_manager.get_command(command_name)
+    active = (
+        (torch.abs(command[:, 0]) > cmd_x_threshold)
+        & (torch.abs(command[:, 2]) <= yaw_command_threshold)
+    ).to(dtype=error.dtype)
+    return active * torch.square(error)
+
+
+def transition_heading_retention_penalty(
+    env: ManagerBasedRLEnv,
+    command_name: str = "base_velocity",
+    cmd_x_threshold: float = 0.10,
+    yaw_command_threshold: float = 0.05,
+    low_weight: float = 1.0,
+    high_start_weight: float = 0.0,
+    high_end_peak_weight: float = 1.0,
+    high_end_decay_s: float = 3.0,
+) -> torch.Tensor:
+    """Stage-weighted squared heading error around the LOW maneuver.
+
+    Uses the privileged course stage and the heading error maintained by the
+    spatial friction update event.  The weight is large during LOW and the
+    first seconds after HIGH_END entry, then decays so steady-state HIGH_START
+    walking keeps its original objective.
+    """
+
+    stage = getattr(env, "spatial_course_stage_buf", None)
+    heading = getattr(env, "transition_heading_error_buf", None)
+    elapsed = getattr(env, "spatial_high_end_elapsed_s_buf", None)
+    if stage is None or heading is None or elapsed is None:
+        return torch.zeros(env.num_envs, device=env.device)
+    weight = transition_stage_heading_weight(
+        stage,
+        elapsed,
+        low_weight=low_weight,
+        high_start_weight=high_start_weight,
+        high_end_peak_weight=high_end_peak_weight,
+        high_end_decay_s=high_end_decay_s,
+    )
+    command = env.command_manager.get_command(command_name)
+    active = (
+        (torch.abs(command[:, 0]) > cmd_x_threshold)
+        & (torch.abs(command[:, 2]) <= yaw_command_threshold)
+    ).to(dtype=heading.dtype)
+    error = torch.nan_to_num(
+        heading, nan=0.0, posinf=1.0, neginf=-1.0
+    ).clamp(-1.0, 1.0)
+    return active * weight * torch.square(error)
+
+
+def transition_vy_retention_penalty(
+    env: ManagerBasedRLEnv,
+    command_name: str = "base_velocity",
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    cmd_x_threshold: float = 0.10,
+    low_weight: float = 1.0,
+    high_start_weight: float = 0.0,
+    high_end_peak_weight: float = 1.0,
+    high_end_decay_s: float = 3.0,
+    lateral_clip: float = 1.5,
+) -> torch.Tensor:
+    """Stage-weighted squared body lateral velocity around the LOW maneuver."""
+
+    stage = getattr(env, "spatial_course_stage_buf", None)
+    elapsed = getattr(env, "spatial_high_end_elapsed_s_buf", None)
+    if stage is None or elapsed is None:
+        return torch.zeros(env.num_envs, device=env.device)
+    asset: Articulation = env.scene[asset_cfg.name]
+    vy = torch.clamp(
+        torch.nan_to_num(
+            asset.data.root_lin_vel_b[:, 1],
+            nan=0.0,
+            posinf=float(lateral_clip),
+            neginf=-float(lateral_clip),
+        ),
+        -lateral_clip,
+        lateral_clip,
+    )
+    weight = transition_stage_heading_weight(
+        stage,
+        elapsed,
+        low_weight=low_weight,
+        high_start_weight=high_start_weight,
+        high_end_peak_weight=high_end_peak_weight,
+        high_end_decay_s=high_end_decay_s,
+    )
+    command = env.command_manager.get_command(command_name)
+    active = (torch.abs(command[:, 0]) > cmd_x_threshold).to(dtype=vy.dtype)
+    return active * weight * torch.square(vy)
+
+
+def low_stage_yaw_rate_penalty(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    yaw_rate_clip: float = 2.0,
+) -> torch.Tensor:
+    """Squared yaw rate active only inside the LOW patch.
+
+    The remaining LOW heading injection is slip-driven rotation during the
+    deceleration maneuver.  This term damps that rotation directly without
+    touching HIGH_START or the post-transition HIGH_END convergence objective.
+    """
+
+    stage = getattr(env, "spatial_course_stage_buf", None)
+    if stage is None:
+        return torch.zeros(env.num_envs, device=env.device)
+    asset: Articulation = env.scene[asset_cfg.name]
+    wz = torch.clamp(
+        torch.nan_to_num(
+            asset.data.root_ang_vel_b[:, 2],
+            nan=0.0,
+            posinf=float(yaw_rate_clip),
+            neginf=-float(yaw_rate_clip),
+        ),
+        -yaw_rate_clip,
+        yaw_rate_clip,
+    )
+    return (stage == SPATIAL_LOW).to(dtype=wz.dtype) * torch.square(wz)
+
+
+def low_stage_leg_symmetry_penalty(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    equal_pairs: tuple[tuple[str, str], ...] = (
+        ("left_hip_pitch_joint", "right_hip_pitch_joint"),
+        ("left_knee_joint", "right_knee_joint"),
+        ("left_ankle_pitch_joint", "right_ankle_pitch_joint"),
+    ),
+    opposite_pairs: tuple[tuple[str, str], ...] = (
+        ("left_hip_roll_joint", "right_hip_roll_joint"),
+        ("left_hip_yaw_joint", "right_hip_yaw_joint"),
+        ("left_ankle_roll_joint", "right_ankle_roll_joint"),
+    ),
+) -> torch.Tensor:
+    """LOW-only left/right leg position symmetry cost.
+
+    A systematic single-sided yaw bias in LOW is most directly attacked by a
+    sign-aware mirror cost: sagittal joints must match, frontal/transverse
+    joints must be opposite.  The weight stays small so turning/recovery
+    actions are not forced into a rigid mirror; only the persistent DC
+    asymmetry is penalized.  HIGH_START and HIGH_END are untouched.
+    """
+
+    stage = getattr(env, "spatial_course_stage_buf", None)
+    if stage is None:
+        return torch.zeros(env.num_envs, device=env.device)
+    asset: Articulation = env.scene[asset_cfg.name]
+    pair_list = [(tuple(pair), False) for pair in equal_pairs] + [
+        (tuple(pair), True) for pair in opposite_pairs
+    ]
+    cost = torch.zeros(env.num_envs, device=env.device)
+    for pair, opposite in pair_list:
+        if len(pair) != 2:
+            raise ValueError("each symmetry pair must contain exactly two joints")
+        left = asset.data.joint_pos[:, asset.find_joints(pair[0])[0][0]]
+        right = asset.data.joint_pos[:, asset.find_joints(pair[1])[0][0]]
+        delta = left + right if opposite else left - right
+        cost += torch.square(delta)
+    if pair_list:
+        cost = cost / len(pair_list)
+    return (stage == SPATIAL_LOW).to(dtype=cost.dtype) * cost
+
+
+def low_entry_heading_change_penalty(
+    env: ManagerBasedRLEnv,
+    error_clip: float = 0.5,
+) -> torch.Tensor:
+    """Penalize any permanent heading change after first LOW contact.
+
+    The LOW maneuver must not change the robot's original forward direction.
+    ``spatial_low_entry_heading_buf`` freezes the heading error at first LOW
+    contact, so the term is zero while the error returns to that value and
+    grows quadratically for a permanent offset.
+    """
+
+    entry = getattr(env, "spatial_low_entry_heading_buf", None)
+    current = getattr(env, "transition_heading_error_buf", None)
+    if entry is None or current is None:
+        return torch.zeros(env.num_envs, device=env.device)
+    has_entry = torch.isfinite(entry)
+    delta = torch.nan_to_num(
+        current - torch.nan_to_num(entry, nan=0.0),
+        nan=0.0,
+        posinf=float(error_clip),
+        neginf=-float(error_clip),
+    ).clamp(-error_clip, error_clip)
+    return has_entry.to(dtype=delta.dtype) * torch.square(delta)
+
+
+def windowed_vy_penalty(
+    env: ManagerBasedRLEnv,
+    command_name: str = "base_velocity",
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    cmd_x_threshold: float = 0.10,
+    window_steps: int = 50,
+    lateral_clip: float = 1.5,
+) -> torch.Tensor:
+    """Squared windowed-mean body vy: attacks low-frequency lateral drift.
+
+    Instantaneous lateral motion inside a step is left to the ordinary vy cost;
+    this term only activates when the one-second window mean stays nonzero, so
+    it targets the chronic drift identified by the ±15 m acceptance.
+    """
+
+    if window_steps < 1:
+        raise ValueError("window_steps must be positive")
+    asset: Articulation = env.scene[asset_cfg.name]
+    vy = torch.clamp(
+        torch.nan_to_num(
+            asset.data.root_lin_vel_b[:, 1],
+            nan=0.0,
+            posinf=float(lateral_clip),
+            neginf=-float(lateral_clip),
+        ),
+        -lateral_clip,
+        lateral_clip,
+    )
+    window = getattr(env, "transition_vy_window_buf", None)
+    if window is None or window.shape != (env.num_envs, int(window_steps)):
+        window = torch.zeros(
+            (env.num_envs, int(window_steps)),
+            device=env.device,
+            dtype=vy.dtype,
+        )
+        env.transition_vy_window_buf = window
+        env.transition_vy_window_head = 0
+    head = int(env.transition_vy_window_head)
+    window[:, head] = vy
+    env.transition_vy_window_head = (head + 1) % int(window_steps)
+    reset = env.episode_length_buf <= 1
+    if bool(reset.any().item()):
+        window[reset] = 0.0
+    mean_vy = window.mean(dim=1)
+    command = env.command_manager.get_command(command_name)
+    active = (torch.abs(command[:, 0]) > cmd_x_threshold).to(dtype=mean_vy.dtype)
+    return active * torch.square(mean_vy)
 
 
 def traction_adaptive_feet_gait(

@@ -1,0 +1,97 @@
+{
+  "method": "exact Isaac on-policy magnetic DAgger",
+  "base": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_shared_magnetic/20260728_shared15x3_lateral8110_blend50/shared_magnetic_policy.pt",
+  "teacher_onnx": "/home/mosense/guo/unitree_rl_lab/logs/rsl_rl/unitree_g1_29dof_velocity_foot_traction_teacher_speed_lateral/2026-07-29_10-35-30_speed_lateral_prod_20260729_production/exported/policy.onnx",
+  "train": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_magnetic_speed_lateral/20260729_production/dagger/round1_seed314159.npz",
+  "test": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_magnetic_speed_lateral/20260729_production/dagger/round1_seed271828.npz",
+  "augmentation": [
+    {
+      "path": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_shared_magnetic/20260728_dagger1_mujoco_dagger_data/train.npz",
+      "samples": 30884,
+      "repeat": 1
+    }
+  ],
+  "training_samples": 102884,
+  "test_samples": 72000,
+  "epochs": 10,
+  "mirror_augmentation": false,
+  "lateral_joint_weight": 1.25,
+  "symmetry_coef": 0.0,
+  "high_mu_command_scale": 1.0,
+  "high_mu_threshold": 0.75,
+  "high_command_threshold": 0.7,
+  "high_mu_sample_weight": 3.0,
+  "teacher_mix_low": 0.0,
+  "teacher_mix_high": 0.3,
+  "teacher_mix_mean": {
+    "train": 0.045083433389663696,
+    "test": 0.04930255189538002
+  },
+  "base_action_coef": 0.75,
+  "freeze_foot_encoder": false,
+  "actor_head_only": true,
+  "auxiliary_coef_scale": 0.0,
+  "boosted_samples": {
+    "train": 23383,
+    "test": 19200
+  },
+  "target_action_clip": 4.0,
+  "before": {
+    "samples": 72000,
+    "mae": 0.001982047688215971,
+    "rmse": 0.006439710967242718,
+    "p95_abs": 0.011250197887420654,
+    "p95_l2": 0.0825495906174183,
+    "max_abs": 0.245803564786911
+  },
+  "after": {
+    "samples": 72000,
+    "mae": 0.002203911542892456,
+    "rmse": 0.006374307908117771,
+    "p95_abs": 0.01097576618194579,
+    "p95_l2": 0.08156596124172212,
+    "max_abs": 0.24307218194007874
+  },
+  "teacher_action_metrics": {
+    "before": {
+      "samples": 72000,
+      "mae": 0.03757670521736145,
+      "rmse": 0.060152094811201096,
+      "p95_abs": 0.12221515923738455,
+      "p95_l2": 0.5190129458904267,
+      "max_abs": 0.9362818002700806
+    },
+    "after": {
+      "samples": 72000,
+      "mae": 0.03748577833175659,
+      "rmse": 0.06005482375621796,
+      "p95_abs": 0.1220272816717624,
+      "p95_l2": 0.5181842803955078,
+      "max_abs": 0.931686520576477
+    }
+  },
+  "final_loss": 0.0002388029597298528,
+  "gates": {
+    "action_mae": {
+      "value": 0.002203911542892456,
+      "target": "<= 0.035",
+      "pass": true
+    },
+    "action_p95": {
+      "value": 0.01097576618194579,
+      "target": "<= 0.090",
+      "pass": true
+    },
+    "improved_mae": {
+      "value": 0.00022186385467648506,
+      "target": "< 0",
+      "pass": false
+    },
+    "finite": {
+      "value": true,
+      "target": "true",
+      "pass": true
+    }
+  },
+  "overall": "FAIL"
+}

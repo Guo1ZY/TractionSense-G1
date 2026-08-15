@@ -1,0 +1,233 @@
+{
+  "status": "trained_sim_risk_estimator",
+  "model_variant": "baseline_invariant",
+  "risk_target": {
+    "center_mu": 0.3,
+    "temperature": 0.025
+  },
+  "overall": "PASS",
+  "student_inputs": "proprio + dual-foot 15x3 Hall history + timing/health",
+  "forbidden_inputs": [
+    "normal_force",
+    "tangential_force",
+    "friction_truth",
+    "contact_truth"
+  ],
+  "train_samples": 38960,
+  "test_samples": 11928,
+  "nominal": {
+    "samples": 11928,
+    "mae_soft_target": 0.16083072125911713,
+    "low_mean": 0.859046220779419,
+    "high_mean": 0.17568477988243103,
+    "switch_high_mean": 0.27243492007255554,
+    "low_detection_rate_p_ge_0p65": 0.8674547283702213,
+    "high_clear_rate_p_le_0p55": 0.880533199195171,
+    "balanced_accuracy": 0.8739939637826961,
+    "high_false_critical_rate": 0.053948692152917505,
+    "finite": true
+  },
+  "randomized": {
+    "samples": 11928,
+    "mae_soft_target": 0.19172315299510956,
+    "low_mean": 0.8440892696380615,
+    "high_mean": 0.21418504416942596,
+    "switch_high_mean": 0.29959815740585327,
+    "low_detection_rate_p_ge_0p65": 0.84079476861167,
+    "high_clear_rate_p_le_0p55": 0.8421780684104627,
+    "balanced_accuracy": 0.8414864185110664,
+    "high_false_critical_rate": 0.09670523138832998,
+    "finite": true
+  },
+  "fault_risk_min": 1.0,
+  "onnx_parity_max_abs": 2.980232238769531e-07,
+  "onnx_parity_tolerance": 3e-05,
+  "gates": {
+    "finite": true,
+    "nominal_balanced_accuracy_ge_0p85": true,
+    "randomized_balanced_accuracy_ge_0p80": true,
+    "switch_high_mean_le_0p45": true,
+    "sensor_loss_maps_to_risk_one": true,
+    "onnx_parity": true
+  },
+  "checkpoint": "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_continuation/hall_risk_round25_active_crosssim/hall_risk_estimator.pt",
+  "checkpoint_sha256": "de56767d5fefdaf314dc40ef5b154ac08714ed4d0e9cb461a85176f119f0b750",
+  "onnx": "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_continuation/hall_risk_round25_active_crosssim/hall_risk.onnx",
+  "onnx_sha256": "9c816cae676e66f3cca8823c6ce7f4ce5cde5f4c914b13901f18893b6efc68e5",
+  "sources": {
+    "train": [
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_continuation/isaac_active_probe_seed85_nominal.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_continuation/isaac_active_probe_seed89_low_start_nominal.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/r25_active_nominal_seed20260831.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/r25_active_randomized_lowstart_seed20260832.npz"
+    ],
+    "test": [
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_continuation/isaac_active_probe_seed92_randomized_holdout.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/r25_active_randomized_holdout_seed20260833.npz"
+    ],
+    "initialize_policy": null,
+    "initialize_risk": null
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "loss": 0.5974857724667575
+    },
+    {
+      "epoch": 2,
+      "loss": 0.4877364462161211
+    },
+    {
+      "epoch": 3,
+      "loss": 0.4407529931660795
+    },
+    {
+      "epoch": 4,
+      "loss": 0.4143318347005629
+    },
+    {
+      "epoch": 5,
+      "loss": 0.39185823184998375
+    },
+    {
+      "epoch": 6,
+      "loss": 0.36691995811413447
+    },
+    {
+      "epoch": 7,
+      "loss": 0.3544251929073608
+    },
+    {
+      "epoch": 8,
+      "loss": 0.34439289815861585
+    },
+    {
+      "epoch": 9,
+      "loss": 0.3299238739684377
+    },
+    {
+      "epoch": 10,
+      "loss": 0.32065829394779166
+    },
+    {
+      "epoch": 11,
+      "loss": 0.31587046680692776
+    },
+    {
+      "epoch": 12,
+      "loss": 0.3143615843334237
+    },
+    {
+      "epoch": 13,
+      "loss": 0.3050931345877951
+    },
+    {
+      "epoch": 14,
+      "loss": 0.29784480945285585
+    },
+    {
+      "epoch": 15,
+      "loss": 0.2979205347612898
+    },
+    {
+      "epoch": 16,
+      "loss": 0.28510220311505596
+    },
+    {
+      "epoch": 17,
+      "loss": 0.2810331314067821
+    },
+    {
+      "epoch": 18,
+      "loss": 0.2853338936087532
+    },
+    {
+      "epoch": 19,
+      "loss": 0.2768750444268789
+    },
+    {
+      "epoch": 20,
+      "loss": 0.2716961288843801
+    },
+    {
+      "epoch": 21,
+      "loss": 0.2678575292505033
+    },
+    {
+      "epoch": 22,
+      "loss": 0.26413396928589444
+    },
+    {
+      "epoch": 23,
+      "loss": 0.2643431559052066
+    },
+    {
+      "epoch": 24,
+      "loss": 0.2619165102192019
+    },
+    {
+      "epoch": 25,
+      "loss": 0.25872890763826195
+    },
+    {
+      "epoch": 26,
+      "loss": 0.2506302524641064
+    },
+    {
+      "epoch": 27,
+      "loss": 0.25166596070819325
+    },
+    {
+      "epoch": 28,
+      "loss": 0.2519937569355818
+    },
+    {
+      "epoch": 29,
+      "loss": 0.24767482150996245
+    },
+    {
+      "epoch": 30,
+      "loss": 0.24571853294142462
+    },
+    {
+      "epoch": 31,
+      "loss": 0.24028746606877696
+    },
+    {
+      "epoch": 32,
+      "loss": 0.2410887194977159
+    },
+    {
+      "epoch": 33,
+      "loss": 0.24128706217791265
+    },
+    {
+      "epoch": 34,
+      "loss": 0.2386282177309236
+    },
+    {
+      "epoch": 35,
+      "loss": 0.23744936276387874
+    },
+    {
+      "epoch": 36,
+      "loss": 0.23929920621231596
+    },
+    {
+      "epoch": 37,
+      "loss": 0.23779217700571495
+    },
+    {
+      "epoch": 38,
+      "loss": 0.23460746291848913
+    },
+    {
+      "epoch": 39,
+      "loss": 0.2349776383420525
+    },
+    {
+      "epoch": 40,
+      "loss": 0.23712553660972407
+    }
+  ]
+}

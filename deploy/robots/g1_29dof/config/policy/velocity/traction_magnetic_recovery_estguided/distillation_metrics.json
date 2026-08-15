@@ -1,0 +1,16 @@
+{
+  "method": "calibration-gated estimator-guided magnetic Teacher",
+  "policy_type": "estimator_guided_magnetic_teacher",
+  "teacher_onnx": "/home/mosense/guo/unitree_rl_lab/logs/rsl_rl/unitree_g1_29dof_velocity_foot_traction_teacher_speed_lateral/2026-07-29_10-35-30_speed_lateral_prod_20260729_production/exported/policy.onnx",
+  "estimator_pt": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_magnetic_speed_lateral/20260729_recovery/friction_estimator_1864/friction_estimator.pt",
+  "safe": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_magnetic_speed_lateral/20260729_recovery/candidates/trust010/shared_magnetic_policy.pt",
+  "safe_checkpoint": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_magnetic_speed_lateral/20260729_recovery/candidates/trust010/shared_magnetic_policy.pt",
+  "residual_center": 0.06,
+  "residual_sharpness": 150.0,
+  "evidence_center": 0.15,
+  "evidence_sharpness": 50.0,
+  "friction_input": "estimated from causal 1864-D observation",
+  "privileged_mu_at_inference": false,
+  "input_dim": 1864,
+  "output_dim": 29
+}

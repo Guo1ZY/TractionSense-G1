@@ -4,8 +4,8 @@ set -euo pipefail
 
 ROBOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "${ROBOT_DIR}/../../../.." && pwd)"
-PYTHON="${G1_PYTHON:-python3}"
-TRAINER="${ROOT}/research_scripts/train_proprio_traction_classifier.py"
+PYTHON="${G1_PYTHON:-/home/mosense/miniconda3/envs/isaaclab-v2/bin/python}"
+TRAINER="${ROOT}/scripts/train_proprio_traction_classifier.py"
 
 usage() {
   echo "Usage: $0 [--install] <low.npz> <high.npz> [more labeled .npz ...]"

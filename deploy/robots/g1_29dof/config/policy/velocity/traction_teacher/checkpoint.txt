@@ -1,0 +1,1 @@
+/home/mosense/guo/unitree_rl_lab/logs/rsl_rl/unitree_g1_29dof_velocity_foot_traction_teacher_speed_lateral/2026-07-29_10-35-30_speed_lateral_prod_20260729_production/model_8260.pt

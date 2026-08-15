@@ -1,0 +1,1 @@
+/home/mosense/guo/unitree_rl_lab/logs/evaluations/friction_switch_training/final_sensor_policy_20260729/shared_magnetic_policy.pt

@@ -1,0 +1,12 @@
+{
+  "status": "mujoco_steady_matrix_pass_switch_fail_not_hardware_validated",
+  "policy": "layout-aware direct-Hall magnetic Student v6 consolidated",
+  "input_shape": [1, 1864],
+  "output_shape": [1, 29],
+  "onnx_sha256": "b08a8e9540ea92c23298c312961430ac8532ef71ab4170ba7c5d967832481e8b",
+  "checkpoint_sha256": "5a241d9835c8b86be2831486cb31a487713c60a25f793f4ccb514db2277705e2",
+  "student_uses_force": false,
+  "student_uses_ground_friction": false,
+  "sensor_layout": "P0..P14 from SSH /home/mosense/guo_1/ble_sensor; coordinates in observation_schema.json",
+  "default_selected": false
+}

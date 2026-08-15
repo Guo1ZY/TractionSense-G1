@@ -9,8 +9,8 @@ import torch
 
 
 SCRIPT = (
-    Path(__file__).resolve().parents[2]
-    / "research_scripts/fine_tune_shared_magnetic_dagger.py"
+    Path(__file__).resolve().parents[3]
+    / "scripts/fine_tune_shared_magnetic_dagger.py"
 )
 sys.path.insert(0, str(SCRIPT.parent))
 SPEC = importlib.util.spec_from_file_location("magnetic_speed_lateral", SCRIPT)

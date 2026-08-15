@@ -1,0 +1,8 @@
+{
+  "overall": "PASS",
+  "status": "spatial_hall_candidate_selected",
+  "model_variant": "hall_spatial_transition_model6100",
+  "checkpoint": "model_6100.pt",
+  "measurement_boundary": "Hall Bx/By/Bz plus proprioception; no force or friction truth",
+  "selection_note": "Selected after nominal and hardened spatial H-L-H screening; multi-seed zero-fall gate remains pending."
+}

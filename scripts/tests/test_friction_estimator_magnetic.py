@@ -6,10 +6,7 @@ from pathlib import Path
 import numpy as np
 
 
-SCRIPT = (
-    Path(__file__).resolve().parents[2]
-    / "research_scripts/evaluate_friction_estimator.py"
-)
+SCRIPT = Path(__file__).resolve().parents[3] / "scripts/evaluate_friction_estimator.py"
 SPEC = importlib.util.spec_from_file_location("friction_estimator_magnetic", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -24,3 +21,4 @@ def test_1864_feature_partitions_do_not_leak_or_drop_channels() -> None:
     assert np.array_equal(proprio, np.arange(480))
     assert np.array_equal(foot, np.arange(480, 1864))
     assert np.intersect1d(proprio, foot).size == 0
+

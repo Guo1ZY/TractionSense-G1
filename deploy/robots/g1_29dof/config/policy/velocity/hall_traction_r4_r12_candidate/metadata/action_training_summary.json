@@ -1,0 +1,105 @@
+{
+  "status": "trained_sim_candidate",
+  "overall": "PASS",
+  "method": "layout-aware direct Hall-domain privileged Teacher distillation",
+  "student_inputs": "proprio + dual-foot 15x3 normalized Hall history + timing/health",
+  "student_forbidden_inputs": [
+    "normal_force",
+    "tangential_force",
+    "calibrated_force_xyz",
+    "ideal_contact_force",
+    "ground_friction_mu",
+    "contact_or_slip_truth",
+    "terrain_label"
+  ],
+  "training_samples": 168268,
+  "validation_samples": 32333,
+  "checkpoint": "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/layout_magnetic_physical_round4_low_speed_observability/layout_magnetic_student.pt",
+  "checkpoint_sha256": "87153b12e55b6952f22b3fb7094c0a7826e7d101e3ea493ece555d12a8aae530",
+  "onnx_sha256": "f43269cdce4627d74b54c769faf00813f2455e0e95f85774c001b374cca76dc4",
+  "diagnostics_onnx_sha256": "a0823d2d0ddca81674e04398cea6cb9c97c61e176237836d707130f681335cf3",
+  "hall_risk_onnx_sha256": "5b6047114d817733df89c40f67867080efeafd1a4d9b9b1a95591094bc15bc6d",
+  "nominal": {
+    "bounded_target": {
+      "samples": 32333,
+      "mae": 0.07135962694883347,
+      "rmse": 0.11322181671857834,
+      "p95_abs": 0.28817732334136936,
+      "max_abs": 0.7000000476837158
+    },
+    "raw_teacher": {
+      "samples": 32333,
+      "mae": 0.2184884399175644,
+      "rmse": 0.7706701159477234,
+      "p95_abs": 0.8750457406044002,
+      "max_abs": 65.4097900390625
+    },
+    "mu_mae": 0.17483697831630707,
+    "mu_low_mean": 0.1401614099740982,
+    "mu_high_mean": 0.6692526936531067,
+    "mu_extreme_accuracy": 0.8362705064832724,
+    "confidence_mean": 0.8976260423660278,
+    "slip_risk_mae": 0.32649609446525574,
+    "slip_risk_mean": 0.4159291386604309,
+    "residual_max_abs": 0.3499999940395355,
+    "finite": true
+  },
+  "randomized": {
+    "bounded_target": {
+      "samples": 32333,
+      "mae": 0.07515416294336319,
+      "rmse": 0.11808290332555771,
+      "p95_abs": 0.31883944272994946,
+      "max_abs": 0.7000000476837158
+    },
+    "raw_teacher": {
+      "samples": 32333,
+      "mae": 0.2222830057144165,
+      "rmse": 0.7729318737983704,
+      "p95_abs": 0.8867693066596978,
+      "max_abs": 65.4097900390625
+    },
+    "mu_mae": 0.17546997964382172,
+    "mu_low_mean": 0.1400652378797531,
+    "mu_high_mean": 0.6684292554855347,
+    "mu_extreme_accuracy": 0.8368794326241135,
+    "confidence_mean": 0.8537601828575134,
+    "slip_risk_mae": 0.3265383541584015,
+    "slip_risk_mean": 0.4160217046737671,
+    "residual_max_abs": 0.3499999940395355,
+    "finite": true
+  },
+  "fallback_max_abs": 0.0,
+  "onnx_parity_max_abs": 7.152557373046875e-07,
+  "gates": {
+    "finite": true,
+    "nominal_action_mae_le_0p08": true,
+    "randomized_action_mae_le_0p10": true,
+    "randomized_p95_within_residual_budget": true,
+    "residual_bound": true,
+    "sensor_loss_exact_fallback": true,
+    "onnx_parity": true
+  },
+  "loss_weights": {
+    "usable_traction": 0.25,
+    "slip_risk": 0.1
+  },
+  "sources": {
+    "train": [
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round1_aggregate_data/train.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round2_lowmu_data/train.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round3_lowmu_data/train.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round4_highmu_lowspeed_data/train.npz"
+    ],
+    "test": [
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round1_aggregate_data/test.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round2_lowmu_data/test.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round3_lowmu_data/test.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round4_highmu_lowspeed_data/test.npz"
+    ],
+    "teacher": "/home/mosense/guo/unitree_rl_lab/logs/imported_remote_20260728/teacher_8110.onnx",
+    "baseline": "/home/mosense/guo/unitree_rl_lab/model/rl/model_49999.pt",
+    "initialize": "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/layout_magnetic_physical_round3_diagnostics/layout_magnetic_student.pt",
+    "behavior_consolidation": null
+  }
+}

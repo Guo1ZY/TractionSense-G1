@@ -1,0 +1,43 @@
+{
+  "format": "g1-hall-traction-acceptance-v1",
+  "measurement_boundary": {
+    "student_inputs": "proprioception plus normalized dual-foot Hall history and link health",
+    "forbidden_student_inputs": [
+      "normal_force",
+      "tangential_force",
+      "calibrated_force_xyz",
+      "ground_friction_mu",
+      "contact_or_slip_truth"
+    ],
+    "real_hall_unit": "device_count_before_per-channel_normalization",
+    "force_available_from_hall": false
+  },
+  "steady": {
+    "minimum_sensor_valid": 0.999,
+    "maximum_falls": 0,
+    "minimum_stable_fraction": 1.0,
+    "high_friction_threshold": 0.8,
+    "tracking_command_threshold_m_s": 0.5,
+    "maximum_high_friction_relative_vx_error": 0.20,
+    "maximum_high_friction_abs_vy_m_s": 0.15
+  },
+  "switch": {
+    "maximum_falls": 0,
+    "minimum_stable_fraction": 0.98,
+    "maximum_response_time_s": 0.60
+  },
+  "deployment": {
+    "input_dimension": 1864,
+    "output_dimension": 29,
+    "onnx_parity_max_abs": 1e-5,
+    "sensor_loss_fallback_max_abs": 1e-5,
+    "policy_period_s": 0.02
+  },
+  "mujoco_source_forbidden_patterns": [
+    "force_lr[2][2]",
+    "normal_axis[3]",
+    "tangent_axis[3]",
+    "Invert the deterministic MuJoCo Hall proxy",
+    "arctanh(np.clip(magnetic"
+  ]
+}

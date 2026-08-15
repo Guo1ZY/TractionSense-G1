@@ -1,0 +1,1 @@
+/home/mosense/guo/unitree_rl_lab/artifacts/layout_magnetic_student_20260806_v6_consolidated/layout_magnetic_student.pt

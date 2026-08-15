@@ -148,12 +148,10 @@ inline bool parse_packet(const char * buf, size_t n, Packet & out)
     return false;
 }
 
-/** Thread-safe cached reader (called every policy step). */
-inline Packet read_latest(bool * ok = nullptr)
+/** Read and validate one packet directly from the bridge file. */
+inline Packet read_latest_uncached(bool * ok = nullptr)
 {
     static std::mutex mu;
-    static Packet cache{};
-    static bool cache_valid = false;
 
     std::lock_guard<std::mutex> lock(mu);
     const std::string path = default_path();
@@ -197,8 +195,6 @@ inline Packet read_latest(bool * ok = nullptr)
         if (ok) {
             *ok = false;
         }
-        cache = p;
-        cache_valid = true;
         Packet stale{};
         stale.valid = 0.f;
         stale.age = 1.f;
@@ -220,12 +216,80 @@ inline Packet read_latest(bool * ok = nullptr)
         p.age = std::max(p.age_lr[0], p.age_lr[1]);
     }
     p.ok = true;
-    cache = p;
-    cache_valid = true;
     if (ok) {
         *ok = true;
     }
     return p;
+}
+
+/**
+ * Per-thread snapshot shared by every foot observation term in one observation
+ * manager evaluation. An explicit scope is used instead of a wall-clock cache:
+ * a slow control iteration must never inherit the previous iteration's packet,
+ * while magnetic/period/valid terms in the same iteration remain coherent.
+ */
+struct ObservationSnapshotState
+{
+    Packet packet{};
+    bool ok = false;
+    bool captured = false;
+    size_t depth = 0;
+};
+
+inline ObservationSnapshotState& observation_snapshot_state()
+{
+    thread_local ObservationSnapshotState state;
+    return state;
+}
+
+inline void begin_observation_snapshot()
+{
+    auto& state = observation_snapshot_state();
+    if (state.depth == 0) {
+        // Read lazily on the first foot term. Non-foot policies must not incur
+        // bridge file I/O merely because they share ObservationManager.
+        state.captured = false;
+        state.ok = false;
+    }
+    ++state.depth;
+}
+
+inline void end_observation_snapshot() noexcept
+{
+    auto& state = observation_snapshot_state();
+    if (state.depth > 0) {
+        --state.depth;
+        if (state.depth == 0) {
+            state.captured = false;
+        }
+    }
+}
+
+class ScopedObservationSnapshot
+{
+public:
+    ScopedObservationSnapshot() { begin_observation_snapshot(); }
+    ~ScopedObservationSnapshot() { end_observation_snapshot(); }
+
+    ScopedObservationSnapshot(const ScopedObservationSnapshot&) = delete;
+    ScopedObservationSnapshot& operator=(const ScopedObservationSnapshot&) = delete;
+};
+
+/** Return the current observation snapshot, or perform an uncached standalone read. */
+inline Packet read_latest(bool * ok = nullptr)
+{
+    auto& state = observation_snapshot_state();
+    if (state.depth > 0) {
+        if (!state.captured) {
+            state.packet = read_latest_uncached(&state.ok);
+            state.captured = true;
+        }
+        if (ok) {
+            *ok = state.ok;
+        }
+        return state.packet;
+    }
+    return read_latest_uncached(ok);
 }
 
 inline std::vector<float> contact_lr()

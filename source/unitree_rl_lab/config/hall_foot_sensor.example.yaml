@@ -1,0 +1,120 @@
+# HallFootSensorCfg example.  All geometric and magnetic quantities are SI.
+# Canonical foot frame: +x toe, +y robot-left, +z up.  Foot order is always
+# [left_foot, right_foot]; Hall order is P00..P14 below.
+hall_foot_sensor:
+  enabled: true
+  implementation_mode: approximate  # approximate | deformable
+  left_foot_prim_path: "{ENV_REGEX_NS}/Robot/left_ankle_roll_link"
+  right_foot_prim_path: "{ENV_REGEX_NS}/Robot/right_ankle_roll_link"
+
+  sole_length: 0.21502
+  sole_width: 0.08004
+  sole_thickness: 0.01050
+  pcb_enclosure_thickness: 0.00940  # rigid housing; PCB is inside it
+  sole_origin: [0.035, 0.0, 0.0]
+  sole_yaw_deg: 0.0
+  right_sole_yaw_deg: 0.0
+  mirror_right_y: true
+  right_hall_axis_sign: [1.0, -1.0, 1.0]
+  hall_height: -0.0420
+
+  # Digitized from the 1280x1793 px, 1:1 A4 vola_sensor/2.png.
+  # Drawn sole bounds: u=7..508, v=488..1780.  Each five-point group is
+  # ordered top, image-left, centre, image-right, bottom.
+  hall_positions_normalized:
+    - [ 0.372291, -0.004990]  # P00 forefoot top
+    - [ 0.335913,  0.097804]  # P01 forefoot image-left
+    - [ 0.333591, -0.002994]  # P02 forefoot centre
+    - [ 0.334752, -0.105788]  # P03 forefoot image-right
+    - [ 0.296827, -0.004990]  # P04 forefoot bottom
+    - [ 0.044892, -0.012974]  # P05 midfoot top
+    - [ 0.008514,  0.095808]  # P06 midfoot image-left
+    - [ 0.006966, -0.008982]  # P07 midfoot centre
+    - [ 0.009675, -0.116766]  # P08 midfoot image-right
+    - [-0.029025, -0.010978]  # P09 midfoot bottom
+    - [-0.281347, -0.002994]  # P10 heel top
+    - [-0.318885,  0.102794]  # P11 heel image-left
+    - [-0.319659, -0.005988]  # P12 heel centre
+    - [-0.319272, -0.102794]  # P13 heel image-right
+    - [-0.355263,  0.002994]  # P14 heel bottom
+  hall_axis_yaw_deg: [-90, -90, 0, 90, 0, -90, -90, 180, 90, -90, 0, -90, 180, 90, 0]
+  hall_package_size: [0.0040, 0.0040, 0.0010]
+
+  magnets_per_hall: 4
+  magnet_layout: square_2x2
+  magnet_spacing_x: 0.0060
+  magnet_spacing_y: 0.0060
+  magnet_size: 0.0040       # round-disc diameter
+  magnet_thickness: 0.0015
+  magnet_embedding_depth: 0.0040  # centre depth below magnetized TPU top
+  magnetization_direction: [0.0, 0.0, 1.0]
+  magnetic_moment: 0.0100   # A*m^2, active dipole-model parameter
+  remanence_strength: 0.80  # T, retained for geometry/material calibration
+  initial_hall_magnet_distance: 0.0060
+  dipole_min_distance: 0.0005
+
+  tpu_thickness: 0.0100
+  # Only this bottom layer deforms.  There is no connector/compliance layer.
+  tpu_effective_shore_a: 40.0
+  tpu_youngs_modulus: 1.7e6
+  tpu_solid_youngs_modulus: 5.5e6
+  tpu_poisson_ratio: 0.30
+  tpu_density: 400.0
+  tpu_dynamic_friction: 0.80
+  tpu_damping: 0.08
+  deformable_strict_geometry_check: true
+  deformable_max_cooked_thickness_ratio: 1.35
+  local_normal_stiffness: 1.5e5
+  local_shear_stiffness: 5.0e4
+  local_damping: 3.0e3
+  # aggregate: legacy total force + one mean point (fast/checkpoint-compatible)
+  # detailed: every PhysX normal patch/friction anchor drives its nearby Hall
+  # sites; still only Bx/By/Bz reaches the actor.
+  contact_distribution_mode: aggregate  # aggregate | detailed
+  contact_spread_sigma: 0.035
+  detailed_contact_force_atol: 1.0e-3  # N, raw-vs-aggregate fail-closed audit
+  detailed_contact_force_rtol: 1.0e-4
+  detailed_contact_fail_on_buffer_saturation: true
+  max_normal_compression: 0.0040
+  max_shear_displacement: 0.0040
+  max_local_rotation: 0.35
+  contact_force_threshold: 1.0
+
+  sensor_sample_rate: 50.0
+  bias: [0.0, 0.0, 0.0]
+  noise_std: [2.0e-5, 2.0e-5, 2.0e-5]
+  resolution: 1.0e-6
+  saturation_min: [-0.20, -0.20, -0.20]
+  saturation_max: [0.20, 0.20, 0.20]
+  low_pass_cutoff: 20.0
+  drift_std_per_sqrt_s: 2.0e-6
+  drift_limit: 2.0e-4
+  temperature_coefficient: [0.0, 0.0, 0.0]
+  reference_temperature_c: 25.0
+  auto_zero: true
+  auto_zero_samples: 8
+  output_raw: true
+  output_processed: true
+
+  # GUI: cyan vector arrow at each Hall point.  Direction is [Bx,By,Bz],
+  # length is |B| after debug_field_scale; width is fixed in metres.
+  enable_debug_vis: false
+  debug_vis_max_envs: 1
+  debug_field_scale: 0.50
+  debug_field_arrow_width: 0.0020
+  debug_field_arrow_min_length: 0.0030
+  debug_field_arrow_max_length: 0.0500
+
+  observation_scale_t: 0.010
+  observation_clip: [-6.0, 6.0]
+  loading_history_length: 16
+  enable_debug_vis: false
+  debug_vis_max_envs: 1
+  debug_field_scale: 0.50
+
+# Environment-level selector used by RobotFootTractionMagneticStudentEnvCfg:
+# hall    -> physical Hall history only (default, actor remains 1864-D)
+# contact -> original contact-force history only (actor dimension changes)
+# both    -> Hall plus original contact-force history (actor dimension changes)
+sensor_output_mode: hall
+use_legacy_magnetic_proxy: false

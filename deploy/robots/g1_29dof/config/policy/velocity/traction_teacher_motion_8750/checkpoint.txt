@@ -1,0 +1,1 @@
+/home/mosense/guo/unitree_rl_lab/logs/rsl_rl/unitree_g1_29dof_velocity_foot_traction_teacher_motion_feedback/2026-07-29_12-40-11_motion_feedback_prod_20260729/model_8750.pt

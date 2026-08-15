@@ -9,6 +9,7 @@
 #include "isaaclab/manager/action_manager.h"
 #include "isaaclab/assets/articulation/articulation.h"
 #include "isaaclab/algorithms/algorithms.h"
+#include "isaaclab/envs/lateral_motion_feedback_preflight.h"
 #include "isaaclab/envs/traction_speed_governor.h"
 #include <iostream>
 #include "isaaclab/utils/utils.h"
@@ -74,6 +75,10 @@ public:
         // load managers
         action_manager = std::make_unique<ActionManager>(cfg["actions"], this);
         observation_manager = std::make_unique<ObservationManager>(cfg["observations"], this);
+        const bool lateral_feedback_required =
+            requires_lateral_motion_feedback(cfg["observations"]);
+        const bool motion_sidecar_configured = nonempty_motion_feedback_path(
+            std::getenv("G1_MOTION_FEEDBACK_PATH"));
         if (const char* estimator_path = std::getenv("G1_FRICTION_ESTIMATOR_ONNX")) {
             if (estimator_path[0] != '\0') {
                 friction_estimator = std::make_unique<ScalarOrtRunner>(estimator_path);
@@ -85,22 +90,41 @@ public:
                           << " alpha=" << friction_estimator_alpha << std::endl;
             }
         }
-        if (const char* estimator_path =
-                std::getenv("G1_LATERAL_VELOCITY_ESTIMATOR_ONNX")) {
-            if (estimator_path[0] != '\0') {
+        // The estimator overwrites policy_dim-2. Never install it for a
+        // sensor-age schema merely because the environment variable is stale.
+        const char* lateral_estimator_path =
+            std::getenv("G1_LATERAL_VELOCITY_ESTIMATOR_ONNX");
+        if (should_load_lateral_velocity_estimator(
+                lateral_feedback_required, lateral_estimator_path)) {
+            const char* estimator_path = lateral_estimator_path;
+            try {
                 lateral_velocity_estimator =
                     std::make_unique<ScalarOrtRunner>(estimator_path);
-                if (const char* alpha =
-                        std::getenv("G1_LATERAL_VELOCITY_ESTIMATOR_ALPHA")) {
-                    lateral_velocity_estimator_alpha =
-                        std::clamp(std::strtof(alpha, nullptr), 0.01f, 1.0f);
-                }
-                std::cout
-                    << "[lateral_velocity_estimator] ONNX=" << estimator_path
-                    << " input=" << lateral_velocity_estimator->input_size()
-                    << " alpha=" << lateral_velocity_estimator_alpha
-                    << std::endl;
+            } catch (const std::exception& error) {
+                throw std::runtime_error(
+                    "Failed to load G1_LATERAL_VELOCITY_ESTIMATOR_ONNX '"
+                    + std::string(estimator_path) + "': " + error.what());
             }
+            if (const char* alpha =
+                    std::getenv("G1_LATERAL_VELOCITY_ESTIMATOR_ALPHA")) {
+                lateral_velocity_estimator_alpha =
+                    std::clamp(std::strtof(alpha, nullptr), 0.01f, 1.0f);
+            }
+            std::cout
+                << "[lateral_velocity_estimator] ONNX=" << estimator_path
+                << " input=" << lateral_velocity_estimator->input_size()
+                << " alpha=" << lateral_velocity_estimator_alpha
+                << std::endl;
+        }
+        if (lateral_feedback_required) {
+            validate_lateral_motion_feedback_preflight(
+                true,
+                motion_sidecar_configured,
+                lateral_velocity_estimator != nullptr,
+                observation_manager->policy_observation_size(),
+                lateral_velocity_estimator
+                    ? lateral_velocity_estimator->input_size()
+                    : 0);
         }
         const char* classifier_path =
             std::getenv("G1_TRACTION_PROPRIO_CLASSIFIER_ONNX");
@@ -144,6 +168,25 @@ public:
                     << " foot_channels=IGNORED"
                     << std::endl;
         }
+        if (const char* hall_risk_path =
+                std::getenv("G1_TRACTION_HALL_RISK_ONNX")) {
+            if (hall_risk_path[0] != '\0') {
+                traction_hall_risk_estimator =
+                    std::make_unique<ScalarOrtRunner>(hall_risk_path);
+                if (const char* value =
+                        std::getenv("G1_TRACTION_HALL_RISK_ALPHA")) {
+                    traction_hall_risk_alpha = std::clamp(
+                        std::strtof(value, nullptr), 0.01f, 1.0f);
+                }
+                std::cout
+                    << "[traction_hall_risk] ONNX=" << hall_risk_path
+                    << " input=" << traction_hall_risk_estimator->input_size()
+                    << " alpha=" << traction_hall_risk_alpha
+                    << " semantics=causal_risk_probability"
+                    << " hall_to_force=DISABLED"
+                    << std::endl;
+                }
+            }
     }
 
     void reset()
@@ -168,6 +211,9 @@ public:
         traction_proprio_mu = 0.20f;
         traction_proprio_estimator_initialized = false;
         traction_proprio_feedback = {};
+        traction_hall_risk = 1.0f;
+        traction_hall_risk_initialized = false;
+        traction_hall_feedback = {};
     }
 
     void step()
@@ -175,6 +221,7 @@ public:
         episode_length += 1;
         robot->update();
         auto obs = observation_manager->compute();
+        apply_traction_hall_risk_estimator(obs);
         apply_traction_proprio_estimator(obs);
         apply_friction_estimator(obs);
         apply_lateral_velocity_estimator(obs);
@@ -184,7 +231,7 @@ public:
     }
 
     float step_dt;
-
+    
     YAML::Node cfg;
 
     std::unique_ptr<ObservationManager> observation_manager;
@@ -194,6 +241,7 @@ public:
     std::unique_ptr<ScalarOrtRunner> friction_estimator;
     std::unique_ptr<ScalarOrtRunner> lateral_velocity_estimator;
     std::unique_ptr<ScalarOrtRunner> traction_proprio_estimator;
+    std::unique_ptr<ScalarOrtRunner> traction_hall_risk_estimator;
     long episode_length = 0;
     float global_phase = 0.0f;
 
@@ -314,6 +362,19 @@ private:
                 governor_cfg.low_speed_limit);
             governor_cfg.high_speed_limit = node["high_speed_limit"].as<float>(
                 governor_cfg.high_speed_limit);
+            governor_cfg.critical_speed_limit =
+                node["critical_speed_limit"].as<float>(
+                    governor_cfg.critical_speed_limit);
+            governor_cfg.low_lateral_limit =
+                node["low_lateral_limit"].as<float>(
+                    governor_cfg.low_lateral_limit);
+            governor_cfg.high_lateral_limit =
+                node["high_lateral_limit"].as<float>(
+                    governor_cfg.high_lateral_limit);
+            governor_cfg.low_yaw_limit = node["low_yaw_limit"].as<float>(
+                governor_cfg.low_yaw_limit);
+            governor_cfg.high_yaw_limit = node["high_yaw_limit"].as<float>(
+                governor_cfg.high_yaw_limit);
             governor_cfg.accel_rate =
                 node["accel_rate"].as<float>(governor_cfg.accel_rate);
             governor_cfg.decel_rate =
@@ -324,6 +385,24 @@ private:
             governor_cfg.probability_high_enter =
                 node["probability_high_enter"].as<float>(
                     governor_cfg.probability_high_enter);
+            governor_cfg.probability_critical_enter =
+                node["probability_critical_enter"].as<float>(
+                    governor_cfg.probability_critical_enter);
+            governor_cfg.critical_hold_s =
+                node["critical_hold_s"].as<float>(
+                    governor_cfg.critical_hold_s);
+            governor_cfg.probability_ema_alpha =
+                node["probability_ema_alpha"].as<float>(
+                    governor_cfg.probability_ema_alpha);
+            governor_cfg.state_reference_ema_alpha =
+                node["state_reference_ema_alpha"].as<float>(
+                    governor_cfg.state_reference_ema_alpha);
+            governor_cfg.relative_low_rise =
+                node["relative_low_rise"].as<float>(
+                    governor_cfg.relative_low_rise);
+            governor_cfg.relative_high_drop =
+                node["relative_high_drop"].as<float>(
+                    governor_cfg.relative_high_drop);
             governor_cfg.low_hold_s =
                 node["low_hold_s"].as<float>(governor_cfg.low_hold_s);
             governor_cfg.high_hold_s =
@@ -334,10 +413,29 @@ private:
             governor_cfg.min_detection_command =
                 node["min_detection_command"].as<float>(
                     governor_cfg.min_detection_command);
+            governor_cfg.startup_command_threshold =
+                node["startup_command_threshold"].as<float>(
+                    governor_cfg.startup_command_threshold);
             governor_cfg.warmup_s =
                 node["warmup_s"].as<float>(governor_cfg.warmup_s);
             governor_cfg.probe_s =
                 node["probe_s"].as<float>(governor_cfg.probe_s);
+            governor_cfg.probe_speed_limit =
+                node["probe_speed_limit"].as<float>(
+                    governor_cfg.probe_speed_limit);
+            governor_cfg.low_reprobe_s = node["low_reprobe_s"].as<float>(
+                governor_cfg.low_reprobe_s);
+            governor_cfg.probe_relative_clear_drop =
+                node["probe_relative_clear_drop"].as<float>(
+                    governor_cfg.probe_relative_clear_drop);
+            governor_cfg.crawl_pulse_s = node["crawl_pulse_s"].as<float>(
+                governor_cfg.crawl_pulse_s);
+            governor_cfg.crawl_min_hold_s =
+                node["crawl_min_hold_s"].as<float>(
+                    governor_cfg.crawl_min_hold_s);
+            governor_cfg.launch_accel_rate =
+                node["launch_accel_rate"].as<float>(
+                    governor_cfg.launch_accel_rate);
             governor_cfg.tracking_low_enter =
                 node["tracking_low_enter"].as<float>(
                     governor_cfg.tracking_low_enter);
@@ -363,12 +461,32 @@ private:
             governor_cfg.high_speed_limit =
                 std::max(0.0f, std::strtof(value, nullptr));
         }
+        if (const char* value = std::getenv("G1_TRACTION_LOW_LATERAL")) {
+            governor_cfg.low_lateral_limit =
+                std::max(0.0f, std::strtof(value, nullptr));
+        }
+        if (const char* value = std::getenv("G1_TRACTION_HIGH_LATERAL")) {
+            governor_cfg.high_lateral_limit =
+                std::max(0.0f, std::strtof(value, nullptr));
+        }
+        if (const char* value = std::getenv("G1_TRACTION_LOW_YAW")) {
+            governor_cfg.low_yaw_limit =
+                std::max(0.0f, std::strtof(value, nullptr));
+        }
+        if (const char* value = std::getenv("G1_TRACTION_HIGH_YAW")) {
+            governor_cfg.high_yaw_limit =
+                std::max(0.0f, std::strtof(value, nullptr));
+        }
         if (const char* value = std::getenv("G1_TRACTION_ACCEL")) {
             governor_cfg.accel_rate =
                 std::max(0.0f, std::strtof(value, nullptr));
         }
         if (const char* value = std::getenv("G1_TRACTION_DECEL")) {
             governor_cfg.decel_rate =
+                std::max(0.0f, std::strtof(value, nullptr));
+        }
+        if (const char* value = std::getenv("G1_TRACTION_PROBE_SPEED")) {
+            governor_cfg.probe_speed_limit =
                 std::max(0.0f, std::strtof(value, nullptr));
         }
         traction_governor.configure(governor_cfg);
@@ -379,6 +497,10 @@ private:
                 << TractionSpeedGovernor::mode_name(governor_cfg.mode)
                 << " low=" << governor_cfg.low_speed_limit
                 << " high=" << governor_cfg.high_speed_limit
+                << " lateral=" << governor_cfg.low_lateral_limit
+                << '/' << governor_cfg.high_lateral_limit
+                << " yaw=" << governor_cfg.low_yaw_limit
+                << '/' << governor_cfg.high_yaw_limit
                 << " accel=" << governor_cfg.accel_rate
                 << " decel=" << governor_cfg.decel_rate
                 << " lock_vy_wz="
@@ -419,7 +541,9 @@ private:
     {
         const char* path = std::getenv("G1_TRACTION_FEEDBACK_PATH");
         if (!path || path[0] == '\0') {
-            return traction_proprio_feedback;
+            return traction_hall_feedback.valid
+                ? traction_hall_feedback
+                : traction_proprio_feedback;
         }
 
         try {
@@ -428,15 +552,21 @@ private:
                 decltype(write_time)::clock::now() - write_time).count();
             if (age_s < 0.0f
                 || age_s > traction_governor.config().feedback_timeout_s) {
-                return traction_proprio_feedback;
+                return traction_hall_feedback.valid
+                    ? traction_hall_feedback
+                    : traction_proprio_feedback;
             }
         } catch (const std::exception&) {
-            return traction_proprio_feedback;
+            return traction_hall_feedback.valid
+                ? traction_hall_feedback
+                : traction_proprio_feedback;
         }
 
         std::ifstream input(path);
         if (!input) {
-            return traction_proprio_feedback;
+            return traction_hall_feedback.valid
+                ? traction_hall_feedback
+                : traction_proprio_feedback;
         }
         const std::string payload(
             (std::istreambuf_iterator<char>(input)),
@@ -450,7 +580,63 @@ private:
             feedback.low_probability);
         read_scalar_from_json(payload, "slip_score", feedback.slip_score);
         feedback.valid = has_vx || has_probability;
-        return feedback.valid ? feedback : traction_proprio_feedback;
+        if (feedback.valid) {
+            return feedback;
+        }
+        return traction_hall_feedback.valid
+            ? traction_hall_feedback
+            : traction_proprio_feedback;
+    }
+
+    void apply_traction_hall_risk_estimator(
+        const std::unordered_map<std::string, std::vector<float>>& obs)
+    {
+        if (!traction_hall_risk_estimator || obs.empty()) {
+            return;
+        }
+        auto it = obs.find("obs");
+        if (it == obs.end()) {
+            it = obs.begin();
+        }
+        const auto& values = it->second;
+        const size_t estimator_dim = traction_hall_risk_estimator->input_size();
+        if (estimator_dim != 1864 || values.size() != estimator_dim) {
+            if (!traction_hall_risk_mismatch_reported) {
+                std::cerr
+                    << "[traction_hall_risk] expected the exact 1864-D "
+                       "Hall/proprio policy observation; model="
+                    << estimator_dim << " policy=" << values.size()
+                    << std::endl;
+                traction_hall_risk_mismatch_reported = true;
+            }
+            traction_hall_feedback = {};
+            return;
+        }
+        float prediction = traction_hall_risk_estimator->infer(values);
+        if (!std::isfinite(prediction)) {
+            traction_hall_feedback = {};
+            return;
+        }
+        prediction = std::clamp(prediction, 0.0f, 1.0f);
+        if (
+            prediction
+            >= traction_governor.config().probability_critical_enter) {
+            // Critical Hall risk has immediate authority; EMA is used only
+            // for ordinary hysteresis and must not delay an emergency stop.
+            traction_hall_risk = prediction;
+            traction_hall_risk_initialized = true;
+        } else if (!traction_hall_risk_initialized) {
+            traction_hall_risk = prediction;
+            traction_hall_risk_initialized = true;
+        } else {
+            traction_hall_risk =
+                (1.0f - traction_hall_risk_alpha) * traction_hall_risk
+                + traction_hall_risk_alpha * prediction;
+        }
+        traction_hall_feedback.valid = true;
+        traction_hall_feedback.measured_vx = 0.0f;
+        traction_hall_feedback.slip_score = traction_hall_risk;
+        traction_hall_feedback.low_probability = traction_hall_risk;
     }
 
     void apply_traction_proprio_estimator(
@@ -715,6 +901,11 @@ private:
     bool traction_proprio_estimator_mismatch_reported = false;
     bool traction_proprio_output_is_probability = false;
     TractionFeedback traction_proprio_feedback;
+    float traction_hall_risk_alpha = 0.20f;
+    float traction_hall_risk = 1.0f;
+    bool traction_hall_risk_initialized = false;
+    bool traction_hall_risk_mismatch_reported = false;
+    TractionFeedback traction_hall_feedback;
 };
 
 };

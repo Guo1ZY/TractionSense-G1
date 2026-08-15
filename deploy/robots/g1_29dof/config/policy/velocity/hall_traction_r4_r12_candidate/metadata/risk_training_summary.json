@@ -1,0 +1,132 @@
+{
+  "status": "trained_sim_risk_estimator",
+  "overall": "PASS",
+  "student_inputs": "proprio + dual-foot 15x3 Hall history + timing/health",
+  "forbidden_inputs": [
+    "normal_force",
+    "tangential_force",
+    "friction_truth",
+    "contact_truth"
+  ],
+  "train_samples": 198148,
+  "test_samples": 40367,
+  "nominal": {
+    "samples": 40367,
+    "mae_soft_target": 0.1598132699728012,
+    "low_mean": 0.828641951084137,
+    "high_mean": 0.1962238997220993,
+    "switch_high_mean": 0.26470524072647095,
+    "low_detection_rate_p_ge_0p65": 0.8318219291014015,
+    "high_clear_rate_p_le_0p55": 0.8962124574641219,
+    "balanced_accuracy": 0.8640171932827617,
+    "high_false_critical_rate": 0.06125166444740346,
+    "finite": true
+  },
+  "randomized": {
+    "samples": 40367,
+    "mae_soft_target": 0.1763390451669693,
+    "low_mean": 0.8374444246292114,
+    "high_mean": 0.23908524215221405,
+    "switch_high_mean": 0.3062779903411865,
+    "low_detection_rate_p_ge_0p65": 0.8432261610332509,
+    "high_clear_rate_p_le_0p55": 0.8483503476845687,
+    "balanced_accuracy": 0.8457882543589098,
+    "high_false_critical_rate": 0.10460127237757065,
+    "finite": true
+  },
+  "fault_risk_min": 1.0,
+  "onnx_parity_max_abs": 1.3530254364013672e-05,
+  "gates": {
+    "finite": true,
+    "nominal_balanced_accuracy_ge_0p85": true,
+    "randomized_balanced_accuracy_ge_0p80": true,
+    "switch_high_mean_le_0p45": true,
+    "sensor_loss_maps_to_risk_one": true,
+    "onnx_parity": true
+  },
+  "checkpoint": "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/hall_risk_round12_crosssim_dagger/hall_risk_estimator.pt",
+  "checkpoint_sha256": "506415fe95a5a5757bdd73cc73ec9bab58d73675d14ace64ba2761d692c532b1",
+  "onnx": "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/hall_risk_round12_crosssim_dagger/hall_risk.onnx",
+  "onnx_sha256": "6d096f0add546d15644ad85f8ba7c3c88767dbe51e2a9d7041ca30bc6910e24a",
+  "sources": {
+    "train": [
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round1_aggregate_data/train.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round2_lowmu_data/train.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round3_lowmu_data/train.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round4_highmu_lowspeed_data/train.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round6_switch_aggregate_data/train.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/nominal_switch_seed20260820.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/multimu_nominal_mu012_seed20260821.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/multimu_nominal_mu020_seed20260821.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/multimu_nominal_mu035_seed20260821.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/multimu_nominal_mu050_seed20260821.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/multimu_nominal_mu080_seed20260821.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/r10_randomized_switch_seed20260824.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/r11_reprobe2500_randomized_switch_seed20260832.npz"
+    ],
+    "test": [
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round1_aggregate_data/test.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round2_lowmu_data/test.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round3_lowmu_data/test.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round4_highmu_lowspeed_data/test.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/isaac_physical_round6_switch_aggregate_data/test.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/multimu_randomized_mu012_seed20260822.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/multimu_randomized_mu020_seed20260822.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/multimu_randomized_mu035_seed20260822.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/multimu_randomized_mu050_seed20260822.npz",
+      "/home/mosense/guo/unitree_mujoco/artifacts/hall_magnetic_crosssim/multimu_randomized_mu080_seed20260822.npz"
+    ],
+    "initialize_policy": null,
+    "initialize_risk": "/home/mosense/guo/unitree_rl_lab/artifacts/hall_traction_execution/hall_risk_round11_crosssim_dagger/hall_risk_estimator.pt"
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "loss": 0.3542376188037349
+    },
+    {
+      "epoch": 2,
+      "loss": 0.3516629289569551
+    },
+    {
+      "epoch": 3,
+      "loss": 0.35099236583080184
+    },
+    {
+      "epoch": 4,
+      "loss": 0.3501361570633432
+    },
+    {
+      "epoch": 5,
+      "loss": 0.34877147881901976
+    },
+    {
+      "epoch": 6,
+      "loss": 0.3455540891404728
+    },
+    {
+      "epoch": 7,
+      "loss": 0.34431323154355686
+    },
+    {
+      "epoch": 8,
+      "loss": 0.3433016823016584
+    },
+    {
+      "epoch": 9,
+      "loss": 0.3419575577649807
+    },
+    {
+      "epoch": 10,
+      "loss": 0.3401749929137245
+    },
+    {
+      "epoch": 11,
+      "loss": 0.339446085245834
+    },
+    {
+      "epoch": 12,
+      "loss": 0.33901758661017367
+    }
+  ]
+}

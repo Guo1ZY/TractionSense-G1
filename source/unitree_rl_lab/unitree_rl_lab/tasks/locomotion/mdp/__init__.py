@@ -8,4 +8,5 @@ from .events_foot import *  # noqa: F401, F403
 from .foot_sensor import *  # noqa: F401, F403
 from .observations import *  # noqa: F401, F403
 from .rewards import *  # noqa: F401, F403
+from .spatial_friction import *  # noqa: F401, F403
 from .symmetry import *  # noqa: F401, F403

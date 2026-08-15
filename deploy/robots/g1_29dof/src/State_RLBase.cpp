@@ -72,7 +72,7 @@ REGISTER_OBSERVATION(keyboard_velocity_commands)
 }
 
 State_RLBase::State_RLBase(int state_mode, std::string state_string)
-: FSMState(state_mode, state_string)
+: FSMState(state_mode, state_string) 
 {
     auto cfg = param::config["FSM"][state_string];
     std::string policy_setting = cfg["policy_dir"].as<std::string>();
@@ -86,11 +86,42 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
     }
     auto policy_dir = param::parser_policy_dir(policy_setting);
 
+    // A Hall candidate carries its causal risk model beside policy.onnx.
+    // Selecting the policy slot is the explicit activation step; no global
+    // config is rewritten by the installer.  An explicit environment value
+    // still takes precedence for controlled A/B tests.
+    const auto bundled_hall_risk =
+        policy_dir / "exported" / "hall_risk.onnx";
+    if (
+        std::filesystem::is_regular_file(bundled_hall_risk)
+        && std::getenv("G1_TRACTION_HALL_RISK_ONNX") == nullptr) {
+        const auto model_path = bundled_hall_risk.string();
+        ::setenv("G1_TRACTION_HALL_RISK_ONNX", model_path.c_str(), 1);
+        spdlog::info(
+            "Bundled Hall-risk model enabled: {} (Hall-to-force disabled)",
+            model_path);
+    }
+
     env = std::make_unique<isaaclab::ManagerBasedRLEnv>(
         YAML::LoadFile(policy_dir / "params" / "deploy.yaml"),
         std::make_shared<unitree::BaseArticulation<LowState_t::SharedPtr>>(FSMState::lowstate)
     );
-    env->alg = std::make_unique<isaaclab::OrtRunner>(policy_dir / "exported" / "policy.onnx");
+    auto policy = std::make_unique<isaaclab::OrtRunner>(
+        policy_dir / "exported" / "policy.onnx",
+        static_cast<size_t>(env->action_manager->total_action_dim()));
+    const size_t deploy_observation_dim =
+        env->observation_manager->policy_observation_size();
+    if (policy->input_count() != 1 || policy->input_name() != "obs"
+        || policy->input_size() != deploy_observation_dim) {
+        throw std::runtime_error(
+            "Policy ONNX/deploy.yaml observation ABI mismatch: expected one "
+            "input named 'obs' with " + std::to_string(deploy_observation_dim)
+            + " values, got count=" + std::to_string(policy->input_count())
+            + ", name='" + (policy->input_count() ? policy->input_name() : "")
+            + "', size="
+            + std::to_string(policy->input_count() ? policy->input_size() : 0));
+    }
+    env->alg = std::move(policy);
 
     // Default limit 1.0 rad. For MuJoCo hang-band bring-up, set e.g. G1_BAD_ORI_LIMIT=1.8
     // to avoid instant Velocity→Passive while settling. Real robot: leave unset.

@@ -13,6 +13,47 @@ if TYPE_CHECKING:
     from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg
 
 
+CHECKPOINT_LOAD_MODE_FRESH = "fresh"
+CHECKPOINT_LOAD_MODE_REGISTRY_RESUME = "registry_resume"
+CHECKPOINT_LOAD_MODE_STRICT_RESUME = "strict_resume"
+CHECKPOINT_LOAD_MODE_PARTIAL = "partial_checkpoint"
+
+
+def validate_checkpoint_load_args(args_cli: argparse.Namespace) -> str:
+    """Return the unambiguous checkpoint load mode or fail closed.
+
+    RSL-RL's registry resume, the project-local strict same-schema resume and
+    the dimension-expanding partial warm-start have deliberately different
+    state semantics.  Accepting more than one silently made the first branch
+    in ``train.py`` win, so a command could look like a strict continuation
+    while actually loading another run (or vice versa).
+    """
+
+    selected = []
+    if bool(getattr(args_cli, "resume", False)):
+        selected.append(CHECKPOINT_LOAD_MODE_REGISTRY_RESUME)
+    if getattr(args_cli, "resume_checkpoint", None):
+        selected.append(CHECKPOINT_LOAD_MODE_STRICT_RESUME)
+    if getattr(args_cli, "partial_checkpoint", None):
+        selected.append(CHECKPOINT_LOAD_MODE_PARTIAL)
+    if len(selected) > 1:
+        raise ValueError(
+            "--resume, --resume_checkpoint and --partial_checkpoint are "
+            "mutually exclusive"
+        )
+
+    mode = selected[0] if selected else CHECKPOINT_LOAD_MODE_FRESH
+    if bool(getattr(args_cli, "partial_checkpoint_critic_only", False)) and mode != CHECKPOINT_LOAD_MODE_PARTIAL:
+        raise ValueError(
+            "--partial_checkpoint_critic_only requires --partial_checkpoint PATH"
+        )
+    if bool(getattr(args_cli, "load_optimizer", False)) and mode != CHECKPOINT_LOAD_MODE_STRICT_RESUME:
+        raise ValueError(
+            "--load_optimizer is valid only with --resume_checkpoint PATH"
+        )
+    return mode
+
+
 def add_rsl_rl_args(parser: argparse.ArgumentParser):
     """Add RSL-RL arguments to the parser.
 
@@ -41,6 +82,16 @@ def add_rsl_rl_args(parser: argparse.ArgumentParser):
         ),
     )
     arg_group.add_argument(
+        "--partial_checkpoint_critic_only",
+        action="store_true",
+        default=False,
+        help=(
+            "With --partial_checkpoint, load only critic tensors. This is the "
+            "safe FastBase gate-warmup mode: the actor mean, gate, residual and "
+            "exploration distribution all remain freshly initialized."
+        ),
+    )
+    arg_group.add_argument(
         "--resume_checkpoint",
         type=str,
         default=None,
@@ -55,6 +106,22 @@ def add_rsl_rl_args(parser: argparse.ArgumentParser):
         action="store_true",
         default=False,
         help="When using --resume_checkpoint, also load optimizer state (default: off, safer after instability).",
+    )
+    arg_group.add_argument(
+        "--learning_rate", type=float, default=None,
+        help="Optional PPO learning-rate override for safe continuation runs.",
+    )
+    arg_group.add_argument(
+        "--anchor_loss_coef",
+        type=float,
+        default=None,
+        help="Override the HIGH-only frozen-Teacher anchor coefficient (lambda).",
+    )
+    arg_group.add_argument(
+        "--anchor_delta_cap",
+        type=float,
+        default=None,
+        help="Override the per-joint cached Teacher target delta cap.",
     )
     # -- logger arguments
     arg_group.add_argument(
@@ -101,6 +168,22 @@ def update_rsl_rl_cfg(agent_cfg: RslRlOnPolicyRunnerCfg, args_cli: argparse.Name
         if args_cli.seed == -1:
             args_cli.seed = random.randint(0, 10000)
         agent_cfg.seed = args_cli.seed
+    if getattr(args_cli, "learning_rate", None) is not None:
+        if args_cli.learning_rate <= 0.0:
+            raise ValueError("learning_rate must be positive")
+        agent_cfg.algorithm.learning_rate = float(args_cli.learning_rate)
+    if getattr(args_cli, "anchor_loss_coef", None) is not None:
+        if not hasattr(agent_cfg.algorithm, "anchor_loss_coef"):
+            raise ValueError("--anchor_loss_coef requires an AnchoredPPO task")
+        if args_cli.anchor_loss_coef < 0.0:
+            raise ValueError("anchor_loss_coef must be non-negative")
+        agent_cfg.algorithm.anchor_loss_coef = float(args_cli.anchor_loss_coef)
+    if getattr(args_cli, "anchor_delta_cap", None) is not None:
+        if not hasattr(agent_cfg.algorithm, "anchor_delta_cap"):
+            raise ValueError("--anchor_delta_cap requires an AnchoredPPO task")
+        if args_cli.anchor_delta_cap <= 0.0:
+            raise ValueError("anchor_delta_cap must be positive")
+        agent_cfg.algorithm.anchor_delta_cap = float(args_cli.anchor_delta_cap)
     if args_cli.resume is not None:
         agent_cfg.resume = args_cli.resume
     if args_cli.load_run is not None:

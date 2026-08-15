@@ -58,7 +58,7 @@ int main(int argc, char** argv)
         spdlog::critical("Unmatched robot type.");
         exit(-1);
     }
-
+    
     // Initialize FSM
     auto fsm = std::make_unique<CtrlFSM>(param::config["FSM"]);
     fsm->start();
@@ -72,6 +72,7 @@ int main(int argc, char** argv)
     {
         sleep(1);
     }
-
+    
     return 0;
 }
+

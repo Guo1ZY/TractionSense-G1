@@ -1,0 +1,40 @@
+{
+  "format": "g1-hall-traction-candidate-v2",
+  "status": "simulation_safety_adaptation_pass_performance_target_partial_real_harness_pending",
+  "default_selected": false,
+  "governor_enabled_in_artifact": false,
+  "student_uses_force": false,
+  "student_uses_ground_friction": false,
+  "measurement": "dual-foot normalized Hall Bx/By/Bz response and proprioception",
+  "mechanics": "TPU local deformation with four embedded magnetic inclusions per Hall site",
+  "policy_input_shape": [
+    1,
+    1864
+  ],
+  "policy_output_shape": [
+    1,
+    29
+  ],
+  "risk_input_shape": [
+    1,
+    1864
+  ],
+  "risk_output_shape": [
+    1,
+    1
+  ],
+  "policy_sha256": "4bafa75b1fb7bcd1df194d8df9fa4f0f44816d77b27bc3ab9cb13e94c5876101",
+  "risk_sha256": "0f5da874e0c527ed1daebf25cb0a239347a784bb1e3dc7dacf485aa1a44dc761",
+  "action_checkpoint_sha256": null,
+  "risk_checkpoint_sha256": "1ebbc23c765ab40f119bce2bbbca1c4d9c6b88ca9177cebf32358c3b9a1951d7",
+  "action_policy_type": "risk_gated_hall_recovery_r26",
+  "risk_model_variant": "slip_aware_invariant",
+  "activation_gates": [
+    "complete real unloaded/motion normalization for both feet",
+    "pass live F0M1 stream preflight",
+    "select G1_POLICY_DIR explicitly",
+    "set G1_TRACTION_GOVERNOR=1 and G1_TRACTION_MODE=auto explicitly",
+    "perform overhead-harness acceptance before free walking"
+  ],
+  "rollback_policy": "unset G1_POLICY_DIR and G1_TRACTION_GOVERNOR; controller config is unchanged"
+}

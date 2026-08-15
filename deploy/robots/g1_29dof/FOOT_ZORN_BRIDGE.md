@@ -51,9 +51,9 @@ docker exec -u root -it zorn bash
 ### 2. 宿主机桥接
 
 ```bash
-<repo>/research_scripts/run_foot_ros_bridge.sh
+/home/mosense/guo/scripts/run_foot_ros_bridge.sh
 # 无 zorn 时自测:
-<repo>/research_scripts/run_foot_ros_bridge.sh --demo
+/home/mosense/guo/scripts/run_foot_ros_bridge.sh --demo
 ```
 
 检查：
@@ -66,7 +66,7 @@ cat /tmp/g1_foot_rl_obs.bin.json
 ### 3. 编译 g1_ctrl（改了 observations 后必须）
 
 ```bash
-cd <repo>/deploy/robots/g1_29dof
+cd /home/mosense/guo/unitree_rl_lab/deploy/robots/g1_29dof
 mkdir -p build && cd build
 cmake .. && make -j$(nproc)
 ```
@@ -76,12 +76,17 @@ cmake .. && make -j$(nproc)
 ```bash
 # 终端1: unitree_mujoco
 # 终端2:
-cd <repo>/deploy/robots/g1_29dof
+cd /home/mosense/guo/unitree_rl_lab/deploy/robots/g1_29dof
 export G1_FOOT_BRIDGE_PATH=/tmp/g1_foot_rl_obs.bin   # 可选，默认即此路径
 export LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH:-}
 ./run_g1_ctrl.sh --network lo
 # A 站立 → X Velocity
 ```
+
+控制器在每次 observation-manager 计算开始时读取一次 IPC 快照。同一策略输入中的
+Hall、采样周期和有效位来自同一个 F0M1 包；下一控制帧会重新读取，不使用跨帧时间缓存。
+ONNX runner 也会在创建输入 tensor 前严格检查 observation vector 长度，YAML/模型维度
+不一致时立即报错退出，不会从 vector 边界外读取。
 
 ## 文件
 
@@ -96,5 +101,7 @@ export LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH:-}
 ## 注意
 
 - `ROS_DOMAIN_ID` 与 zorn 一致（默认 0）。
-- 包超过 **0.25 s** 未更新 → C++ 当 stale，足底回 0。
+- 包超过 **0.25 s** 未更新 → C++ 当 stale，足底回 0。Isaac spatial evaluator
+  的可选 `HealthEnvelope` 默认也使用 `0.25 s`；仿真中显式配置的
+  `sample_age + delay_steps × reported_period` 与真机时间戳包龄采用同一判据。
 - 回退基线策略：config 里改 `policy_dir: config/policy/velocity/v0`。

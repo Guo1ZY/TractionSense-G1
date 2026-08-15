@@ -1,0 +1,1 @@
+/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_magnetic_motion/20260729_model8750_mu120_sym025/shared_magnetic_policy.pt

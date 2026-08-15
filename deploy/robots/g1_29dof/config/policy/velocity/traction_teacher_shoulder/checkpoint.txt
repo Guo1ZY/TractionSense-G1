@@ -1,0 +1,1 @@
+/home/mosense/guo/unitree_rl_lab/logs/rsl_rl/unitree_g1_29dof_velocity_foot_traction_teacher_robust_shoulder/2026-07-21_18-18-09_shoulder_boost_from_7750/model_7775.pt

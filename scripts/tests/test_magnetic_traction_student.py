@@ -7,10 +7,7 @@ import sys
 import torch
 
 
-SCRIPT = (
-    Path(__file__).resolve().parents[2]
-    / "research_scripts/train_magnetic_traction_student.py"
-)
+SCRIPT = Path(__file__).resolve().parents[3] / "scripts/train_magnetic_traction_student.py"
 sys.path.insert(0, str(SCRIPT.parent))
 SPEC = importlib.util.spec_from_file_location("magnetic_train", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)

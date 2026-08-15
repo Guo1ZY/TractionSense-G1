@@ -1,0 +1,1 @@
+/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_shared_motion_student/20260729_round2_stage_c_full_from_a/shared_magnetic_policy.pt

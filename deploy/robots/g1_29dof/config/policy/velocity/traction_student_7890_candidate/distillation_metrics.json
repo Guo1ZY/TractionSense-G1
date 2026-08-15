@@ -1,0 +1,61 @@
+{
+  "method": "privileged action distillation: 640-D history -> frozen Teacher(true training-only mu)",
+  "target_mu": "privileged",
+  "teacher_onnx": "/home/mosense/guo/unitree_rl_lab/deploy/robots/g1_29dof/config/policy/velocity/traction_teacher_recovery_7890/exported/policy.onnx",
+  "estimator_pt": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/friction_estimator/20260722_model_7890_recovery_teacher/model_sim2sim_dagger1/friction_estimator.pt",
+  "input_dim": 640,
+  "output_dim": 29,
+  "training_samples": 163132,
+  "test_samples": 61440,
+  "augmentation_repeat": 4,
+  "augmentation": [
+    {
+      "path": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/mujoco_traction_teacher/recovery_model_7890_full/policy_obs.bin",
+      "samples": 12713,
+      "kind": "raw_grid"
+    },
+    {
+      "path": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/mujoco_traction_teacher/recovery_model_7890_estimated_mu_dagger1_full/policy_obs.bin",
+      "samples": 12710,
+      "kind": "raw_grid"
+    }
+  ],
+  "epochs": 120,
+  "mu_loss_coef": 0.02,
+  "resume_student": null,
+  "final_loss": 0.002019226201082347,
+  "train": {
+    "samples": 163132,
+    "mae": 0.005013520363718271,
+    "rmse": 0.00914963148534298,
+    "p95_abs": 0.015323186665773383,
+    "p95_l2": 0.10314648598432541,
+    "max_abs": 0.23253631591796875
+  },
+  "isaac_unseen": {
+    "samples": 61440,
+    "mae": 0.005888091400265694,
+    "rmse": 0.008336097002029419,
+    "p95_abs": 0.01613191915675996,
+    "p95_l2": 0.0698543135076761,
+    "max_abs": 0.271729975938797
+  },
+  "gates": {
+    "unseen_action_mae": {
+      "value": 0.005888091400265694,
+      "target": "<= 0.030",
+      "pass": true
+    },
+    "unseen_action_p95": {
+      "value": 0.01613191915675996,
+      "target": "<= 0.080",
+      "pass": true
+    },
+    "finite": {
+      "value": true,
+      "target": "true",
+      "pass": true
+    }
+  },
+  "overall": "PASS"
+}

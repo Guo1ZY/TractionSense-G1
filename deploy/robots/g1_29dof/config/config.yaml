@@ -31,11 +31,11 @@ FSM:
       3,3,3,3,3,3,
       3,3,3,3,3,3,
       3,3,3,
-      3,3,3,3,3,3,3,
-      3,3,3,3,3,3,3,
+      3,3,3,3,3,3,3,  
+      3,3,3,3,3,3,3,  
     ]
   FixStand:
-    transitions:
+    transitions: 
       Passive: B.on_pressed
       # 原: RB + X.on_pressed
       Velocity: X.on_pressed
@@ -64,7 +64,7 @@ FSM:
       ]
     ]
   Velocity:
-    transitions:
+    transitions: 
       Passive: B.on_pressed
       Mimic_Dance_102: LT(2s) + down.on_pressed
       Mimic_Gangnam_Style: LT(2s) + left.on_pressed
@@ -75,7 +75,7 @@ FSM:
     # policy_dir: config/policy/velocity/v0
     # policy_dir: ../../../logs/rsl_rl/unitree_g1_29dof_velocity
   Mimic_Dance_102:
-    transitions:
+    transitions: 
       Passive: B.on_pressed
       Velocity: X.on_pressed
     fps: 60
@@ -84,7 +84,7 @@ FSM:
     time_start: 2.8
     time_end: 24.0
   Mimic_Gangnam_Style:
-    transitions:
+    transitions: 
       Passive: B.on_pressed
       Velocity: X.on_pressed
     fps: 60

@@ -1,0 +1,102 @@
+{
+  "status": "trained_sim_candidate",
+  "overall": "PASS",
+  "method": "layout-aware direct Hall-domain privileged Teacher distillation",
+  "student_inputs": "proprio + dual-foot 15x3 normalized Hall history + timing/health",
+  "student_forbidden_inputs": [
+    "normal_force",
+    "tangential_force",
+    "calibrated_force_xyz",
+    "ideal_contact_force",
+    "ground_friction_mu",
+    "contact_or_slip_truth",
+    "terrain_label"
+  ],
+  "training_samples": 115082,
+  "validation_samples": 47010,
+  "checkpoint": "/home/mosense/guo/unitree_rl_lab/artifacts/layout_magnetic_student_20260806_v6_consolidated/layout_magnetic_student.pt",
+  "checkpoint_sha256": "5a241d9835c8b86be2831486cb31a487713c60a25f793f4ccb514db2277705e2",
+  "onnx_sha256": "b08a8e9540ea92c23298c312961430ac8532ef71ab4170ba7c5d967832481e8b",
+  "nominal": {
+    "bounded_target": {
+      "samples": 47010,
+      "mae": 0.0039912923239171505,
+      "rmse": 0.008469795808196068,
+      "p95_abs": 0.011552962660789493,
+      "max_abs": 1.3759727478027344
+    },
+    "raw_teacher": {
+      "samples": 47010,
+      "mae": 0.053416360169649124,
+      "rmse": 0.12346348166465759,
+      "p95_abs": 0.17257527858018887,
+      "max_abs": 11.993619918823242
+    },
+    "mu_mae": 0.23697969317436218,
+    "mu_low_mean": 0.23742416501045227,
+    "mu_high_mean": 0.7280118465423584,
+    "mu_extreme_accuracy": 0.745990014871468,
+    "confidence_mean": 0.5955024361610413,
+    "residual_max_abs": 0.9983741044998169,
+    "finite": true
+  },
+  "randomized": {
+    "bounded_target": {
+      "samples": 47010,
+      "mae": 0.010698541067540646,
+      "rmse": 0.03540290147066116,
+      "p95_abs": 0.030206969752907764,
+      "max_abs": 1.3508086204528809
+    },
+    "raw_teacher": {
+      "samples": 47010,
+      "mae": 0.057051755487918854,
+      "rmse": 0.12983305752277374,
+      "p95_abs": 0.18728178888559346,
+      "max_abs": 12.789709091186523
+    },
+    "mu_mae": 0.24162636697292328,
+    "mu_low_mean": 0.23645716905593872,
+    "mu_high_mean": 0.7212685942649841,
+    "mu_extreme_accuracy": 0.7428563841087742,
+    "confidence_mean": 0.5679007172584534,
+    "residual_max_abs": 0.9980162978172302,
+    "finite": true
+  },
+  "fallback_max_abs": 8.046627044677734e-07,
+  "onnx_parity_max_abs": 4.023313522338867e-07,
+  "gates": {
+    "finite": true,
+    "nominal_action_mae_le_0p08": true,
+    "randomized_action_mae_le_0p10": true,
+    "randomized_p95_le_0p30": true,
+    "residual_bound": true,
+    "sensor_loss_exact_fallback": true,
+    "onnx_parity": true
+  },
+  "sources": {
+    "train": [
+      "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_shared_magnetic/20260728_shared15x3_lateral8110_dagger_data/train.npz",
+      "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_shared_magnetic/20260728_dagger1_mujoco_dagger_data/train.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/layout_magnetic_student_20260806_dagger1_safe_data/train.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/layout_magnetic_student_20260806_dagger2_safe_data/train.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/layout_magnetic_student_20260806_dagger3_full_safe_data/train.npz"
+    ],
+    "test": [
+      "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_shared_magnetic/20260728_shared15x3_lateral8110_dagger_data/test.npz",
+      "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_shared_magnetic/20260728_dagger1_mujoco_dagger_data/test.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/layout_magnetic_student_20260806_dagger1_safe_data/test.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/layout_magnetic_student_20260806_dagger2_safe_data/test.npz",
+      "/home/mosense/guo/unitree_rl_lab/artifacts/layout_magnetic_student_20260806_dagger3_full_safe_data/test.npz"
+    ],
+    "teacher": "/home/mosense/guo/unitree_rl_lab/logs/imported_remote_20260728/teacher_8110.onnx",
+    "baseline": "/home/mosense/guo/unitree_rl_lab/model/rl/model_49999.pt",
+    "initialize": "/home/mosense/guo/unitree_rl_lab/artifacts/layout_magnetic_student_20260806_v5_dagger3_full_safe/layout_magnetic_student.pt",
+    "behavior_consolidation": {
+      "low": "/home/mosense/guo/unitree_rl_lab/artifacts/layout_magnetic_student_20260806_v5_dagger3_full_safe/layout_magnetic_student.pt",
+      "high": "/home/mosense/guo/unitree_rl_lab/artifacts/layout_magnetic_student_20260806_v4_dagger2_safe/layout_magnetic_student.pt",
+      "switch_mu": "0.15",
+      "switch_width": "0.025"
+    }
+  }
+}

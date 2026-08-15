@@ -1,0 +1,20 @@
+{
+  "source_model_dir": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_shared_motion_student/20260729_round2_stage_c_full_from_a",
+  "slot": "/home/mosense/guo/unitree_rl_lab/deploy/robots/g1_29dof/config/policy/velocity/traction_shared_motion_student_round2_c",
+  "activated": false,
+  "observation_layout": {
+    "proprio_history": 480,
+    "magnetic_history": 1350,
+    "period_history": 30,
+    "health": 4,
+    "health_semantics": "valid_lr + body_vy + relative_heading",
+    "total": 1864
+  },
+  "onnx": {
+    "input_name": "obs",
+    "input_dim": 1864,
+    "output_name": "actions",
+    "output_dim": 29,
+    "zero_action_max_abs": 0.46480029821395874
+  }
+}

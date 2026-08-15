@@ -141,7 +141,19 @@ State_Mimic::State_Mimic(int state_mode, std::string state_string)
         YAML::LoadFile(policy_dir / "params" / "deploy.yaml"),
         articulation
     );
-    env->alg = std::make_unique<isaaclab::OrtRunner>(policy_dir / "exported" / "policy.onnx");
+    auto policy = std::make_unique<isaaclab::OrtRunner>(
+        policy_dir / "exported" / "policy.onnx",
+        static_cast<size_t>(env->action_manager->total_action_dim()));
+    const size_t deploy_observation_dim =
+        env->observation_manager->policy_observation_size();
+    if (policy->input_count() != 1 || policy->input_name() != "obs"
+        || policy->input_size() != deploy_observation_dim) {
+        throw std::runtime_error(
+            "Policy ONNX/deploy.yaml observation ABI mismatch: expected one "
+            "input named 'obs' with " + std::to_string(deploy_observation_dim)
+            + " values");
+    }
+    env->alg = std::move(policy);
 
     const auto & joy = FSMState::lowstate->joystick;
     this->registered_checks.emplace_back(

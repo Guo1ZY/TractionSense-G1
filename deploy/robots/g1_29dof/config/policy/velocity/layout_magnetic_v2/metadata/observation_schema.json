@@ -1,0 +1,171 @@
+{
+  "version": "g1_dual_15x3_layout_hall_student_v1",
+  "input_dimension": 1864,
+  "output_dimension": 29,
+  "policy_rate_hz": 50.0,
+  "history_frames": 15,
+  "foot_order": [
+    "left",
+    "right"
+  ],
+  "sensor_order": [
+    "P0",
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+    "P5",
+    "P6",
+    "P7",
+    "P8",
+    "P9",
+    "P10",
+    "P11",
+    "P12",
+    "P13",
+    "P14"
+  ],
+  "hall_axis_order": [
+    "x",
+    "y",
+    "z"
+  ],
+  "hall_frame": "foot_local_aligned: +x toe, +y robot-left, +z up",
+  "hall_units": "per-channel baseline/temperature compensated normalized Hall",
+  "hall_clip": [
+    -6.0,
+    6.0
+  ],
+  "sensor_age_units": "normalized source age: clip(age_s / 0.25, 0, 1)",
+  "flatten_order": "legacy_proprio_480_term_major, hall_[time,left/right,P0..P14,XYZ], sample_period_[time,left/right], valid_left_right, age_left_right",
+  "residual_limit": 1.0,
+  "sensor_positions_xy": [
+    [
+      0.371,
+      -0.016000000000000014
+    ],
+    [
+      0.299,
+      0.201
+    ],
+    [
+      0.297,
+      -0.016000000000000014
+    ],
+    [
+      0.29500000000000004,
+      -0.248
+    ],
+    [
+      0.195,
+      -0.018000000000000016
+    ],
+    [
+      0.065,
+      0.013000000000000012
+    ],
+    [
+      -0.014000000000000012,
+      0.21500000000000002
+    ],
+    [
+      -0.017000000000000015,
+      0.0020000000000000018
+    ],
+    [
+      -0.02200000000000002,
+      -0.241
+    ],
+    [
+      -0.09299999999999997,
+      -0.0040000000000000036
+    ],
+    [
+      -0.251,
+      -0.0040000000000000036
+    ],
+    [
+      -0.30900000000000005,
+      0.177
+    ],
+    [
+      -0.31699999999999995,
+      -0.0040000000000000036
+    ],
+    [
+      -0.31299999999999994,
+      -0.20799999999999996
+    ],
+    [
+      -0.382,
+      -0.0040000000000000036
+    ]
+  ],
+  "region_ids": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    1,
+    1,
+    2,
+    2,
+    2,
+    2,
+    2
+  ],
+  "ble_channel_to_sensor": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14
+  ],
+  "position_unit": "normalized_topology_only_not_mm",
+  "layout_provisional": true,
+  "slices": {
+    "proprio": [
+      0,
+      480
+    ],
+    "magnetic_history": [
+      480,
+      1830
+    ],
+    "sample_period_history": [
+      1830,
+      1860
+    ],
+    "valid_lr": [
+      1860,
+      1862
+    ],
+    "age_lr": [
+      1862,
+      1864
+    ]
+  },
+  "forbidden_student_inputs": [
+    "normal_force",
+    "tangential_force",
+    "calibrated_force_xyz",
+    "ideal_contact_force",
+    "ground_friction_mu",
+    "contact_or_slip_truth",
+    "terrain_label"
+  ]
+}

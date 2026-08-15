@@ -1,0 +1,71 @@
+{
+  "method": "privileged action distillation: 640-D history -> frozen Teacher(true training-only mu)",
+  "target_mu": "privileged",
+  "teacher_onnx": "/home/mosense/guo/unitree_rl_lab/deploy/robots/g1_29dof/config/policy/velocity/traction_teacher_recovery_7890/exported/policy.onnx",
+  "estimator_pt": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/friction_estimator/20260722_model_7890_recovery_teacher/model_sim2sim_dagger1/friction_estimator.pt",
+  "input_dim": 640,
+  "output_dim": 29,
+  "training_samples": 264804,
+  "test_samples": 61440,
+  "augmentation_repeat": 4,
+  "augmentation": [
+    {
+      "path": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/mujoco_traction_teacher/recovery_model_7890_full/policy_obs.bin",
+      "samples": 12713,
+      "kind": "raw_grid"
+    },
+    {
+      "path": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/mujoco_traction_teacher/recovery_model_7890_estimated_mu_dagger1_full/policy_obs.bin",
+      "samples": 12710,
+      "kind": "raw_grid"
+    },
+    {
+      "path": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/mujoco_traction_student/model_7890_student_dagger1_full/policy_obs.bin",
+      "samples": 12709,
+      "kind": "raw_grid"
+    },
+    {
+      "path": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/mujoco_traction_student/model_7890_student_dagger1_full/policy_obs.bin",
+      "samples": 12709,
+      "kind": "raw_grid"
+    }
+  ],
+  "epochs": 80,
+  "mu_loss_coef": 0.03,
+  "resume_student": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_student/20260722_model_7890_privileged_aux_dagger1/student_actor.pt",
+  "final_loss": 0.0026224417500485555,
+  "train": {
+    "samples": 264804,
+    "mae": 0.005262705963104963,
+    "rmse": 0.009502796456217766,
+    "p95_abs": 0.017015578225255013,
+    "p95_l2": 0.09694663435220718,
+    "max_abs": 1.3118860721588135
+  },
+  "isaac_unseen": {
+    "samples": 61440,
+    "mae": 0.00802996288985014,
+    "rmse": 0.011671432293951511,
+    "p95_abs": 0.022051692008972168,
+    "p95_l2": 0.0942136026918888,
+    "max_abs": 1.2994956970214844
+  },
+  "gates": {
+    "unseen_action_mae": {
+      "value": 0.00802996288985014,
+      "target": "<= 0.030",
+      "pass": true
+    },
+    "unseen_action_p95": {
+      "value": 0.022051692008972168,
+      "target": "<= 0.080",
+      "pass": true
+    },
+    "finite": {
+      "value": true,
+      "target": "true",
+      "pass": true
+    }
+  },
+  "overall": "PASS"
+}

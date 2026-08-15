@@ -7,7 +7,7 @@ Simulation training uses Isaac Lab :class:`ContactSensor` on ankle-roll bodies
 ROS2 pipeline so that Real2Sim / Sim2Real can share the same observation
 layout.
 
-Zorn reference (host path configured through ``ZORN_FOOT_SENSOR_ROOT``):
+Zorn reference (host: ``/home/mosense/docker/zorn/workspace/foot_sensor``):
   - ContactView on ``left_ankle_roll_link`` / ``right_ankle_roll_link``
   - Physics dt = 0.005 s; collector rate ~20 Hz; ROS publisher ~50 Hz
   - Topics:
@@ -39,11 +39,23 @@ as ``["left_ankle_roll_link", "right_ankle_roll_link"]``.
 
 from __future__ import annotations
 
+import operator
+import sys
 import torch
 from typing import TYPE_CHECKING
 
+from isaaclab.assets import Articulation
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensor
+from isaaclab.utils.math import quat_apply_inverse
+
+from unitree_rl_lab.sensors import HallFootSensor, HallFootSensorCfg
+from unitree_rl_lab.sensors.hall_contact_distribution import (
+    indexed_buffer_indices,
+    sum_vectors_by_index,
+)
+
+_DETAILED_AUDIT_WARNED_ONCE: set[str] = set()
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -106,6 +118,124 @@ def _foot_forces_w(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg) -> torch.
     """
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     return contact_sensor.data.net_forces_w[:, sensor_cfg.body_ids, :]
+
+
+def _filtered_total_contact_force_w(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Return one dedicated foot sensor's filtered normal + friction force."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    normal_forces_w = contact_sensor.data.force_matrix_w
+    friction_forces_w = contact_sensor.data.friction_forces_w
+    if normal_forces_w is None or friction_forces_w is None:
+        raise RuntimeError(
+            f"ContactSensor '{sensor_cfg.name}' must configure a ground filter "
+            "and track_friction_forces=True"
+        )
+    # Dedicated sensor layout is (env, one foot body, ground filters, xyz).
+    if normal_forces_w.shape[1] != 1 or friction_forces_w.shape[1] != 1:
+        raise RuntimeError(
+            f"ContactSensor '{sensor_cfg.name}' must cover exactly one foot body; "
+            f"got normal {tuple(normal_forces_w.shape)} and friction "
+            f"{tuple(friction_forces_w.shape)}"
+        )
+    return (normal_forces_w + friction_forces_w).sum(dim=(1, 2))
+
+
+def raw_foot_force_world_n(
+    env: ManagerBasedRLEnv,
+    left_sensor_cfg: SceneEntityCfg,
+    right_sensor_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Return signed total ground contact forces in world frame, left then right.
+
+    Returns:
+        Tensor ``(num_envs, 2, 3)`` in Newtons.  Unlike
+        :attr:`ContactSensor.data.net_forces_w`, this includes the filtered
+        friction force as well as the filtered normal force.
+    """
+    left_force_w = _filtered_total_contact_force_w(env, left_sensor_cfg)
+    right_force_w = _filtered_total_contact_force_w(env, right_sensor_cfg)
+    return torch.stack((left_force_w, right_force_w), dim=1)
+
+
+def raw_foot_force_local_n(
+    env: ManagerBasedRLEnv,
+    left_sensor_cfg: SceneEntityCfg,
+    right_sensor_cfg: SceneEntityCfg,
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Return signed left/right net contact force in each ankle-roll link frame.
+
+    The input is the sum of Isaac Lab ContactSensor filtered normal and
+    friction forces, in Newtons. ``quat_apply_inverse`` rotates each world-frame
+    force into the matching ankle-roll link frame.  ``asset_cfg`` must resolve
+    bodies in explicit
+    ``[left_ankle_roll_link, right_ankle_roll_link]`` order.
+
+    Returns:
+        Tensor ``(num_envs, 6)`` in this exact order, still in Newtons:
+        ``[left_Fx, left_Fy, left_Fz, right_Fx, right_Fy, right_Fz]``.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    forces_w = raw_foot_force_world_n(env, left_sensor_cfg, right_sensor_cfg)
+    foot_quat_w = asset.data.body_quat_w[:, asset_cfg.body_ids, :]
+    if forces_w.shape[1] != 2 or foot_quat_w.shape[1] != 2:
+        raise RuntimeError(
+            "raw_foot_force_local_n requires exactly two feet in left/right order; "
+            f"got sensor shape {tuple(forces_w.shape)} and body quaternion shape "
+            f"{tuple(foot_quat_w.shape)}"
+        )
+    return quat_apply_inverse(foot_quat_w, forces_w).reshape(env.num_envs, 6)
+
+
+def normalized_raw_foot_force_local(
+    env: ManagerBasedRLEnv,
+    left_sensor_cfg: SceneEntityCfg,
+    right_sensor_cfg: SceneEntityCfg,
+    asset_cfg: SceneEntityCfg,
+    robot_mass_kg: float | None = None,
+    gravity_m_s2: float = 9.81,
+) -> torch.Tensor:
+    """Return local signed foot forces normalized by ``robot_mass * gravity``.
+
+    With ``robot_mass_kg=None`` (default), the current total articulation mass
+    is read after startup mass randomization and cached independently for every
+    environment.  Supplying ``robot_mass_kg`` provides an explicit configurable
+    normalization mass.  Clipping is intentionally configured on the
+    corresponding ``ObservationTermCfg`` so it occurs immediately before the
+    value is written to policy/critic history.
+    """
+    if gravity_m_s2 <= 0.0:
+        raise ValueError(f"gravity_m_s2 must be positive, got {gravity_m_s2}")
+
+    force_local = raw_foot_force_local_n(
+        env, left_sensor_cfg, right_sensor_cfg, asset_cfg
+    )
+    asset: Articulation = env.scene[asset_cfg.name]
+    if robot_mass_kg is None:
+        # ObservationManager probes this function once before startup events.
+        # Do not retain that nominal mass.  Once all RL managers exist, startup
+        # mass DR has run before the first rollout observation, so the cached
+        # value is the actual per-environment robot mass.
+        robot_mass = getattr(env, "_raw_foot_force_robot_mass_kg", None)
+        if robot_mass is None or not hasattr(env, "termination_manager"):
+            robot_mass = asset.root_physx_view.get_masses().sum(dim=1, keepdim=True).to(
+                device=force_local.device, dtype=force_local.dtype
+            )
+            if hasattr(env, "termination_manager"):
+                env._raw_foot_force_robot_mass_kg = robot_mass
+    else:
+        if robot_mass_kg <= 0.0:
+            raise ValueError(f"robot_mass_kg must be positive, got {robot_mass_kg}")
+        robot_mass = torch.full(
+            (env.num_envs, 1),
+            float(robot_mass_kg),
+            device=force_local.device,
+            dtype=force_local.dtype,
+        )
+    return force_local / (robot_mass * float(gravity_m_s2))
 
 
 def _foot_sensor_validity(env: ManagerBasedRLEnv) -> torch.Tensor:
@@ -657,6 +787,486 @@ def ground_friction_mu(
     if hasattr(env, "ground_friction_mu_buf"):
         return torch.clamp(env.ground_friction_mu_buf.view(env.num_envs, 1), 0.0, clip_max)
     return torch.full((env.num_envs, 1), default_mu, device=env.device, dtype=torch.float32)
+
+
+# ---------------------------------------------------------------------------
+# Flexible magnetic Hall sole (physical Scheme A / deformable Scheme B)
+# ---------------------------------------------------------------------------
+
+
+def _dedicated_hall_contact(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Read total normal+friction force and mean contact point for one foot."""
+    sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    data = sensor.data
+    if data.force_matrix_w is None:
+        normal = data.net_forces_w.sum(dim=1)
+    else:
+        normal = torch.nan_to_num(data.force_matrix_w).sum(dim=(1, 2))
+    friction = (
+        torch.nan_to_num(data.friction_forces_w).sum(dim=(1, 2))
+        if data.friction_forces_w is not None
+        else torch.zeros_like(normal)
+    )
+    force = normal + friction
+    if data.contact_pos_w is None:
+        point = torch.full_like(force, torch.nan)
+    else:
+        positions = data.contact_pos_w.reshape(env.num_envs, -1, 3)
+        finite = torch.isfinite(positions).all(dim=-1, keepdim=True)
+        count = finite.sum(dim=1).clamp_min(1)
+        point = torch.where(finite, positions, 0.0).sum(dim=1) / count
+        point = torch.where((finite.sum(dim=1) > 0), point, torch.full_like(point, torch.nan))
+    return force, point
+
+
+def _audit_detailed_force_sum(
+    *,
+    label: str,
+    raw_forces_w: torch.Tensor,
+    sensor_rows: torch.Tensor,
+    reported_forces_w: torch.Tensor,
+    num_envs: int,
+    atol: float,
+    rtol: float,
+    fail: bool = True,
+) -> None:
+    """Fail closed if detailed and ContactSensor aggregate forces disagree."""
+
+    detailed_sum = sum_vectors_by_index(
+        raw_forces_w,
+        sensor_rows,
+        output_count=num_envs,
+    )
+    reported = torch.nan_to_num(reported_forces_w).sum(dim=(1, 2))
+    if reported.shape != detailed_sum.shape:
+        raise RuntimeError(
+            f"{label}: reported force shape {tuple(reported.shape)} does not match "
+            f"detailed sum {tuple(detailed_sum.shape)}"
+        )
+    close = torch.isclose(detailed_sum, reported, atol=atol, rtol=rtol)
+    if not bool(torch.all(close).item()):
+        max_abs = float(torch.max(torch.abs(detailed_sum - reported)).item())
+        if not fail:
+            if label not in _DETAILED_AUDIT_WARNED_ONCE:
+                _DETAILED_AUDIT_WARNED_ONCE.add(label)
+                print(
+                    f"[hall-detailed-contact-warning] {label}: raw detailed "
+                    f"force disagrees with ContactSensor aggregate "
+                    f"(max_abs_error={max_abs:.6g} N, atol={atol:g}, "
+                    f"rtol={rtol:g}); continuing because the evaluation-only "
+                    "audit mismatch guard is disabled",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            return
+        raise RuntimeError(
+            f"{label}: raw detailed force does not reproduce ContactSensor aggregate "
+            f"(max_abs_error={max_abs:.6g} N, atol={atol:g}, rtol={rtol:g})"
+        )
+
+
+def _detailed_hall_contact_samples(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+    *,
+    foot_index: int,
+    hall_cfg: HallFootSensorCfg,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Read one foot's raw PhysX normal patches and friction anchors.
+
+    Returns ``(forces_w, points_w, env_indices, foot_indices)``.  Normal and
+    friction streams are deliberately gathered independently: Isaac Sim 5.1
+    does not promise a one-to-one index relation between contact patches and
+    friction anchors.
+    """
+
+    if foot_index not in (0, 1):
+        raise ValueError("foot_index must be 0 (left) or 1 (right)")
+    sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    if sensor.num_bodies != 1:
+        raise RuntimeError(
+            f"detailed Hall ContactSensor {sensor_cfg.name!r} must resolve exactly one body"
+        )
+    if not sensor.cfg.track_contact_points or not sensor.cfg.track_friction_forces:
+        raise RuntimeError(
+            f"detailed Hall ContactSensor {sensor_cfg.name!r} requires "
+            "track_contact_points=True and track_friction_forces=True"
+        )
+
+    # Accessing data first advances the ContactSensor's timestamp/buffers.  The
+    # raw RigidContactView queries below then read the exact same physics step.
+    data = sensor.data
+    if data.force_matrix_w is None or data.friction_forces_w is None:
+        raise RuntimeError(
+            f"detailed Hall ContactSensor {sensor_cfg.name!r} requires filtered "
+            "normal and friction force buffers"
+        )
+    view = sensor.contact_physx_view
+    if view.filter_count < 1 or view.max_contact_data_count < 1:
+        raise RuntimeError(
+            f"detailed Hall ContactSensor {sensor_cfg.name!r} has no raw contact capacity"
+        )
+    if view.sensor_count != env.num_envs:
+        raise RuntimeError(
+            f"detailed Hall ContactSensor {sensor_cfg.name!r} has sensor_count="
+            f"{view.sensor_count}, expected {env.num_envs}"
+        )
+    physics_dt = float(getattr(sensor, "_sim_physics_dt", 0.0))
+    if not physics_dt > 0.0:
+        raise RuntimeError("ContactSensor physics dt is unavailable for SI impulse-to-force conversion")
+
+    normal_raw = view.get_contact_data(dt=physics_dt)
+    if not isinstance(normal_raw, tuple) or len(normal_raw) != 6:
+        raise RuntimeError("Isaac Sim 5.1 get_contact_data() contract changed")
+    normal_magnitudes, normal_points_w, normal_directions_w, _, normal_counts, normal_starts = normal_raw
+    expected_count_shape = (env.num_envs, view.filter_count)
+    if tuple(normal_counts.shape) != expected_count_shape or normal_starts.shape != normal_counts.shape:
+        raise RuntimeError(
+            "unexpected detailed normal count/start shape: "
+            f"{tuple(normal_counts.shape)}, expected {expected_count_shape}"
+        )
+    if hall_cfg.detailed_contact_fail_on_buffer_saturation:
+        used = int(normal_counts.to(dtype=torch.long).sum().item())
+        if used >= int(view.max_contact_data_count):
+            raise RuntimeError(
+                f"{sensor_cfg.name}: detailed normal buffer is full ({used}/"
+                f"{view.max_contact_data_count}); increase max_contact_data_count_per_prim"
+            )
+    normal_rows, normal_indices = indexed_buffer_indices(
+        normal_counts,
+        normal_starts,
+        buffer_length=normal_magnitudes.shape[0],
+    )
+    normal_magnitudes = normal_magnitudes.index_select(0, normal_indices).reshape(-1, 1)
+    normal_points_w = normal_points_w.index_select(0, normal_indices)
+    normal_directions_w = normal_directions_w.index_select(0, normal_indices)
+    normal_forces_w = normal_magnitudes * normal_directions_w
+    if not (
+        torch.isfinite(normal_forces_w).all()
+        and torch.isfinite(normal_points_w).all()
+    ):
+        raise RuntimeError(f"{sensor_cfg.name}: non-finite referenced normal contact sample")
+    _audit_detailed_force_sum(
+        label=f"{sensor_cfg.name} normal",
+        raw_forces_w=normal_forces_w,
+        sensor_rows=normal_rows,
+        reported_forces_w=data.force_matrix_w,
+        num_envs=env.num_envs,
+        atol=hall_cfg.detailed_contact_force_atol,
+        rtol=hall_cfg.detailed_contact_force_rtol,
+        fail=hall_cfg.detailed_contact_fail_on_audit_mismatch,
+    )
+
+    friction_raw = view.get_friction_data(dt=physics_dt)
+    if not isinstance(friction_raw, tuple) or len(friction_raw) != 4:
+        raise RuntimeError("Isaac Sim 5.1 get_friction_data() contract changed")
+    friction_forces_buffer, friction_points_buffer, friction_counts, friction_starts = friction_raw
+    if tuple(friction_counts.shape) != expected_count_shape or friction_starts.shape != friction_counts.shape:
+        raise RuntimeError(
+            "unexpected detailed friction count/start shape: "
+            f"{tuple(friction_counts.shape)}, expected {expected_count_shape}"
+        )
+    if hall_cfg.detailed_contact_fail_on_buffer_saturation:
+        used = int(friction_counts.to(dtype=torch.long).sum().item())
+        if used >= int(view.max_contact_data_count):
+            raise RuntimeError(
+                f"{sensor_cfg.name}: detailed friction buffer is full ({used}/"
+                f"{view.max_contact_data_count}); increase max_contact_data_count_per_prim"
+            )
+    friction_rows, friction_indices = indexed_buffer_indices(
+        friction_counts,
+        friction_starts,
+        buffer_length=friction_forces_buffer.shape[0],
+    )
+    friction_forces_w = friction_forces_buffer.index_select(0, friction_indices)
+    friction_points_w = friction_points_buffer.index_select(0, friction_indices)
+    if not (
+        torch.isfinite(friction_forces_w).all()
+        and torch.isfinite(friction_points_w).all()
+    ):
+        raise RuntimeError(f"{sensor_cfg.name}: non-finite referenced friction contact sample")
+    _audit_detailed_force_sum(
+        label=f"{sensor_cfg.name} friction",
+        raw_forces_w=friction_forces_w,
+        sensor_rows=friction_rows,
+        reported_forces_w=data.friction_forces_w,
+        num_envs=env.num_envs,
+        atol=hall_cfg.detailed_contact_force_atol,
+        rtol=hall_cfg.detailed_contact_force_rtol,
+        fail=hall_cfg.detailed_contact_fail_on_audit_mismatch,
+    )
+
+    forces_w = torch.cat((normal_forces_w, friction_forces_w), dim=0)
+    points_w = torch.cat((normal_points_w, friction_points_w), dim=0)
+    env_indices = torch.cat((normal_rows, friction_rows), dim=0).to(dtype=torch.long)
+    foot_indices = torch.full_like(env_indices, foot_index)
+    return forces_w, points_w, env_indices, foot_indices
+
+
+def _hall_foot_packet(
+    env: ManagerBasedRLEnv,
+    hall_cfg: HallFootSensorCfg,
+    asset_cfg: SceneEntityCfg,
+    contact_sensor_cfg: SceneEntityCfg,
+    left_contact_sensor_cfg: SceneEntityCfg | None = None,
+    right_contact_sensor_cfg: SceneEntityCfg | None = None,
+) -> dict[str, torch.Tensor]:
+    """Return one coherent Hall packet per policy step, cached across terms."""
+    sensor = getattr(env, "_hall_foot_sensor", None)
+    if (
+        sensor is None
+        or sensor.cfg != hall_cfg
+        or sensor.num_envs != env.num_envs
+        or sensor.device != torch.device(env.device)
+    ):
+        configured_seed = getattr(getattr(env, "cfg", None), "seed", None)
+        if configured_seed is None:
+            raise RuntimeError(
+                "HallFootSensor requires env.cfg.seed so sensor noise/domain "
+                "randomization follows the effective training/evaluation seed"
+            )
+        try:
+            hall_seed = operator.index(configured_seed)
+        except TypeError as exc:
+            raise TypeError(
+                "env.cfg.seed must be an integer for deterministic Hall sensor "
+                f"randomization, got {configured_seed!r}"
+            ) from exc
+        if hall_seed < 0:
+            raise ValueError(
+                f"env.cfg.seed must be non-negative after CLI seed resolution, got {hall_seed}"
+            )
+        sensor = HallFootSensor(hall_cfg)
+        magnet_pose_provider = None
+        if hall_cfg.implementation_mode == "deformable":
+            magnet_pose_provider = getattr(env, "_hall_magnet_pose_provider", None)
+            if magnet_pose_provider is None:
+                raise RuntimeError(
+                    "Scheme B requires HallSoleAttachmentAction and the left/right "
+                    "magnetized TPU DeformableObject assets; no pose provider was initialized"
+                )
+        sensor.initialize(
+            env.num_envs,
+            env.device,
+            magnet_pose_provider=magnet_pose_provider,
+            seed=hall_seed,
+        )
+        env._hall_foot_sensor = sensor
+        # Expose the effective seed for runtime audits and run provenance.  In
+        # distributed training ``train.py`` has already folded local_rank into
+        # ``env.cfg.seed``, so every rank now receives an independent stream.
+        env._hall_foot_sensor_seed = hall_seed
+        env._hall_foot_sensor_step = -1
+        env._hall_foot_prev_episode_length = env.episode_length_buf.clone()
+
+    step = int(getattr(env, "common_step_counter", 0))
+    if getattr(env, "_hall_foot_sensor_step", -1) != step:
+        previous_length = env._hall_foot_prev_episode_length
+        reset_ids = torch.nonzero(env.episode_length_buf < previous_length, as_tuple=False).flatten()
+        if reset_ids.numel() > 0:
+            sensor.reset(reset_ids)
+        env._hall_foot_prev_episode_length.copy_(env.episode_length_buf)
+
+        asset: Articulation = env.scene[asset_cfg.name]
+        foot_positions_w = asset.data.body_pos_w[:, asset_cfg.body_ids, :]
+        foot_quaternions_w = asset.data.body_quat_w[:, asset_cfg.body_ids, :]
+        if foot_positions_w.shape[1] != 2:
+            raise RuntimeError("asset_cfg must resolve left then right ankle-roll bodies")
+
+        local_contact_force_f = None
+        if left_contact_sensor_cfg is not None and right_contact_sensor_cfg is not None:
+            if hall_cfg.contact_distribution_mode == "detailed":
+                left_samples = _detailed_hall_contact_samples(
+                    env,
+                    left_contact_sensor_cfg,
+                    foot_index=0,
+                    hall_cfg=hall_cfg,
+                )
+                right_samples = _detailed_hall_contact_samples(
+                    env,
+                    right_contact_sensor_cfg,
+                    foot_index=1,
+                    hall_cfg=hall_cfg,
+                )
+                point_forces_w = torch.cat((left_samples[0], right_samples[0]), dim=0)
+                contact_points_w = torch.cat((left_samples[1], right_samples[1]), dim=0)
+                contact_env_indices = torch.cat((left_samples[2], right_samples[2]), dim=0)
+                contact_foot_indices = torch.cat((left_samples[3], right_samples[3]), dim=0)
+                local_contact_force_f = sensor.distribute_detailed_contact_forces(
+                    foot_positions_w=foot_positions_w,
+                    foot_quaternions_w=foot_quaternions_w,
+                    point_forces_w=point_forces_w,
+                    contact_points_w=contact_points_w,
+                    contact_env_indices=contact_env_indices,
+                    contact_foot_indices=contact_foot_indices,
+                )
+                contact_force_w = None
+                contact_point_w = None
+            else:
+                left_force, left_point = _dedicated_hall_contact(env, left_contact_sensor_cfg)
+                right_force, right_point = _dedicated_hall_contact(env, right_contact_sensor_cfg)
+                contact_force_w = torch.stack((left_force, right_force), dim=1)
+                contact_point_w = torch.stack((left_point, right_point), dim=1)
+        else:
+            if hall_cfg.contact_distribution_mode == "detailed":
+                raise RuntimeError(
+                    "contact_distribution_mode='detailed' requires one dedicated "
+                    "filtered ContactSensor per foot; refusing aggregate fallback"
+                )
+            contact_sensor: ContactSensor = env.scene.sensors[contact_sensor_cfg.name]
+            contact_force_w = contact_sensor.data.net_forces_w[:, contact_sensor_cfg.body_ids, :]
+            contact_point_w = None
+
+        sensor.update(
+            env.step_dt,
+            foot_positions_w=foot_positions_w,
+            foot_quaternions_w=foot_quaternions_w,
+            contact_force_w=contact_force_w,
+            contact_point_w=contact_point_w,
+            local_contact_force_f=local_contact_force_f,
+        )
+        debug = sensor.get_debug_data()
+        env._hall_foot_packet_cache = {
+            "raw": sensor.get_raw_data(),
+            "filtered": sensor.get_filtered_data(),
+            "normalized": sensor.get_policy_observation(),
+            "norm": debug["magnetic_norm"],
+            "delta": debug["magnetic_delta"],
+            "deformation": debug["local_deformation"],
+            "valid": sensor.get_policy_valid_mask(),
+            "age": debug["sample_age"],
+            "period": sensor.get_reported_sample_period(),
+        }
+        env._hall_foot_sensor_step = step
+    return env._hall_foot_packet_cache
+
+
+def hall_magnetic_array(
+    env: ManagerBasedRLEnv,
+    hall_cfg: HallFootSensorCfg,
+    asset_cfg: SceneEntityCfg,
+    contact_sensor_cfg: SceneEntityCfg,
+    left_contact_sensor_cfg: SceneEntityCfg | None = None,
+    right_contact_sensor_cfg: SceneEntityCfg | None = None,
+) -> torch.Tensor:
+    """Normalized Hall delta, flattened left ``SxXYZ`` then right ``SxXYZ``."""
+    packet = _hall_foot_packet(
+        env,
+        hall_cfg,
+        asset_cfg,
+        contact_sensor_cfg,
+        left_contact_sensor_cfg,
+        right_contact_sensor_cfg,
+    )
+    return packet["normalized"].reshape(env.num_envs, -1)
+
+
+def hall_magnetic_raw(
+    env: ManagerBasedRLEnv,
+    hall_cfg: HallFootSensorCfg,
+    asset_cfg: SceneEntityCfg,
+    contact_sensor_cfg: SceneEntityCfg,
+    left_contact_sensor_cfg: SceneEntityCfg | None = None,
+    right_contact_sensor_cfg: SceneEntityCfg | None = None,
+) -> torch.Tensor:
+    return _hall_foot_packet(
+        env, hall_cfg, asset_cfg, contact_sensor_cfg, left_contact_sensor_cfg, right_contact_sensor_cfg
+    )["raw"]
+
+
+def hall_magnetic_delta(
+    env: ManagerBasedRLEnv,
+    hall_cfg: HallFootSensorCfg,
+    asset_cfg: SceneEntityCfg,
+    contact_sensor_cfg: SceneEntityCfg,
+    left_contact_sensor_cfg: SceneEntityCfg | None = None,
+    right_contact_sensor_cfg: SceneEntityCfg | None = None,
+) -> torch.Tensor:
+    return _hall_foot_packet(
+        env, hall_cfg, asset_cfg, contact_sensor_cfg, left_contact_sensor_cfg, right_contact_sensor_cfg
+    )["delta"]
+
+
+def hall_local_deformation(
+    env: ManagerBasedRLEnv,
+    hall_cfg: HallFootSensorCfg,
+    asset_cfg: SceneEntityCfg,
+    contact_sensor_cfg: SceneEntityCfg,
+    left_contact_sensor_cfg: SceneEntityCfg | None = None,
+    right_contact_sensor_cfg: SceneEntityCfg | None = None,
+) -> torch.Tensor:
+    return _hall_foot_packet(
+        env, hall_cfg, asset_cfg, contact_sensor_cfg, left_contact_sensor_cfg, right_contact_sensor_cfg
+    )["deformation"]
+
+
+def hall_sensor_valid_lr(
+    env: ManagerBasedRLEnv,
+    hall_cfg: HallFootSensorCfg,
+    asset_cfg: SceneEntityCfg,
+    contact_sensor_cfg: SceneEntityCfg,
+    left_contact_sensor_cfg: SceneEntityCfg | None = None,
+    right_contact_sensor_cfg: SceneEntityCfg | None = None,
+) -> torch.Tensor:
+    valid = _hall_foot_packet(
+        env, hall_cfg, asset_cfg, contact_sensor_cfg, left_contact_sensor_cfg, right_contact_sensor_cfg
+    )["valid"]
+    return valid.all(dim=-1).to(torch.float32)
+
+
+def hall_sensor_age_lr(
+    env: ManagerBasedRLEnv,
+    hall_cfg: HallFootSensorCfg,
+    asset_cfg: SceneEntityCfg,
+    contact_sensor_cfg: SceneEntityCfg,
+    left_contact_sensor_cfg: SceneEntityCfg | None = None,
+    right_contact_sensor_cfg: SceneEntityCfg | None = None,
+    age_scale: float = 0.25,
+) -> torch.Tensor:
+    age = _hall_foot_packet(
+        env, hall_cfg, asset_cfg, contact_sensor_cfg, left_contact_sensor_cfg, right_contact_sensor_cfg
+    )["age"]
+    return torch.clamp(age / max(age_scale, 1.0e-6), 0.0, 1.0)
+
+
+def hall_sample_period_lr(
+    env: ManagerBasedRLEnv,
+    hall_cfg: HallFootSensorCfg,
+    asset_cfg: SceneEntityCfg,
+    contact_sensor_cfg: SceneEntityCfg,
+    left_contact_sensor_cfg: SceneEntityCfg | None = None,
+    right_contact_sensor_cfg: SceneEntityCfg | None = None,
+) -> torch.Tensor:
+    return _hall_foot_packet(
+        env, hall_cfg, asset_cfg, contact_sensor_cfg, left_contact_sensor_cfg, right_contact_sensor_cfg
+    )["period"]
+
+
+def reset_hall_foot_sensor(
+    env: ManagerBasedRLEnv,
+    env_ids: torch.Tensor | None = None,
+) -> None:
+    """Reset Hall baseline/filter/drift state for selected RL environments.
+
+    The Hall object is created lazily by the observation manager, so the first
+    environment reset may legitimately arrive before it exists.  Subsequent
+    partial resets are forwarded exactly and invalidate the per-step packet.
+    """
+    sensor: HallFootSensor | None = getattr(env, "_hall_foot_sensor", None)
+    if sensor is None:
+        return
+    sensor.reset(env_ids)
+    env._hall_foot_sensor_step = -1
+    env._hall_foot_packet_cache = {}
+    if hasattr(env, "_hall_foot_prev_episode_length"):
+        if env_ids is None:
+            env._hall_foot_prev_episode_length.copy_(env.episode_length_buf)
+        else:
+            ids = env_ids.to(device=env.device, dtype=torch.long)
+            env._hall_foot_prev_episode_length[ids] = env.episode_length_buf[ids]
 
 
 def sample_magnetic_array_proxy(

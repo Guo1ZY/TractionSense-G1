@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 
-SCRIPT_DIR = Path(__file__).resolve().parents[2] / "research_scripts"
+SCRIPT_DIR = Path(__file__).resolve().parents[3] / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
 SCRIPT = SCRIPT_DIR / "export_estimator_guided_magnetic_teacher.py"
 SPEC = importlib.util.spec_from_file_location("estimator_guided_teacher", SCRIPT)

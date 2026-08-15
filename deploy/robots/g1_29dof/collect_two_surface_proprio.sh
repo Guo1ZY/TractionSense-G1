@@ -4,8 +4,8 @@ set -euo pipefail
 
 ROBOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "${ROBOT_DIR}/../../../.." && pwd)"
-PYTHON="${G1_PYTHON:-python3}"
-CONVERTER="${ROOT}/research_scripts/convert_g1_obs1_to_labeled_npz.py"
+PYTHON="${G1_PYTHON:-/home/mosense/miniconda3/envs/isaaclab-v2/bin/python}"
+CONVERTER="${ROOT}/scripts/convert_g1_obs1_to_labeled_npz.py"
 
 usage() {
   echo "Usage: G1_REAL_TEST_ACK=YES $0 <low|high> --network <interface>"

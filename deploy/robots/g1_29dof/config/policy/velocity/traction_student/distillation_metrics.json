@@ -1,0 +1,61 @@
+{
+  "method": "privileged action distillation: 640-D history -> frozen Teacher(true training-only mu)",
+  "target_mu": "privileged",
+  "teacher_onnx": "/home/mosense/guo/unitree_rl_lab/deploy/robots/g1_29dof/config/policy/velocity/traction_teacher/exported/policy.onnx",
+  "estimator_pt": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/friction_estimator/20260721_model_7750_robust_teacher/model_sim2sim_dagger1/friction_estimator.pt",
+  "input_dim": 640,
+  "output_dim": 29,
+  "training_samples": 157112,
+  "test_samples": 61440,
+  "augmentation_repeat": 4,
+  "augmentation": [
+    {
+      "path": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/mujoco_traction_teacher/final_model_7750_independent_full/policy_obs.bin",
+      "samples": 11962,
+      "kind": "raw_grid"
+    },
+    {
+      "path": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/mujoco_traction_teacher/final_model_7750_estimated_mu_dagger1_full/policy_obs.bin",
+      "samples": 11956,
+      "kind": "raw_grid"
+    }
+  ],
+  "epochs": 80,
+  "mu_loss_coef": 0.02,
+  "resume_student": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_student/20260721_model_7750_privileged_dagger1/student_actor.pt",
+  "final_loss": 0.002379849596952947,
+  "train": {
+    "samples": 157112,
+    "mae": 0.005286538042128086,
+    "rmse": 0.009806632064282894,
+    "p95_abs": 0.015723237395286527,
+    "p95_l2": 0.11048834770917892,
+    "max_abs": 0.2208418846130371
+  },
+  "isaac_unseen": {
+    "samples": 61440,
+    "mae": 0.005780547391623259,
+    "rmse": 0.008096695877611637,
+    "p95_abs": 0.015850578248500807,
+    "p95_l2": 0.06708997264504432,
+    "max_abs": 0.20199865102767944
+  },
+  "gates": {
+    "unseen_action_mae": {
+      "value": 0.005780547391623259,
+      "target": "<= 0.030",
+      "pass": true
+    },
+    "unseen_action_p95": {
+      "value": 0.015850578248500807,
+      "target": "<= 0.080",
+      "pass": true
+    },
+    "finite": {
+      "value": true,
+      "target": "true",
+      "pass": true
+    }
+  },
+  "overall": "PASS"
+}

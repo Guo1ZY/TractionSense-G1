@@ -9,7 +9,6 @@ Reference: https://github.com/unitreerobotics/unitree_ros
 """
 
 import os
-from pathlib import Path
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import IdealPDActuatorCfg, ImplicitActuatorCfg
@@ -18,12 +17,8 @@ from isaaclab.utils import configclass
 
 from unitree_rl_lab.assets.robots import unitree_actuators
 
-UNITREE_MODEL_DIR = os.environ.get(
-    "UNITREE_MODEL_DIR", str(Path.home() / "Downloads/unitree_model")
-)
-UNITREE_ROS_DIR = os.environ.get(
-    "UNITREE_ROS_DIR", str(Path.home() / "Downloads/unitree_ros")
-)
+UNITREE_MODEL_DIR = "/home/mosense/Downloads/unitree_model"  # USD models (aligned with local assets)
+UNITREE_ROS_DIR = "/home/mosense/Downloads/unitree_ros"  # URDF package (Isaac Sim >= 5.0 recommended path)
 
 
 @configclass

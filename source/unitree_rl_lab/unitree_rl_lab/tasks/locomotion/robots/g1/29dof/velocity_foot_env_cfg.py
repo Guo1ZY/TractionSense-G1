@@ -20,16 +20,25 @@ Baseline task ``Unitree-G1-29dof-Velocity`` is unchanged (always 49999-compatibl
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
+import isaaclab.sim as sim_utils
+import isaaclab.terrains as terrain_gen
+from isaaclab.assets import AssetBaseCfg, DeformableObjectCfg
 from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import TerminationTermCfg as DoneTerm
+from isaaclab.sensors import ContactSensorCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
+from unitree_rl_lab.sensors import HallFootSensorCfg, sync_hall_sensor_cfg_to_policy_terms
+from unitree_rl_lab.sensors.hall_deformable_sole import HallSoleAttachmentActionCfg
+from unitree_rl_lab.assets.deformable_usd import DeformableUsdFileCfg
 from unitree_rl_lab.tasks.locomotion import mdp
 from unitree_rl_lab.tasks.locomotion.mdp.foot_sensor import FOOT_BODY_NAMES
 
@@ -119,6 +128,396 @@ class TurnCurriculumCfg(CurriculumCfg):
 
 FOOT_SENSOR_CFG = SceneEntityCfg("contact_forces", body_names=list(FOOT_BODY_NAMES))
 FOOT_ASSET_CFG = SceneEntityCfg("robot", body_names=list(FOOT_BODY_NAMES))
+HALL_FOOT_ASSET_CFG = SceneEntityCfg(
+    "robot", body_names=list(FOOT_BODY_NAMES), preserve_order=True
+)
+HALL_LEFT_CONTACT_CFG = SceneEntityCfg("left_hall_contact")
+HALL_RIGHT_CONTACT_CFG = SceneEntityCfg("right_hall_contact")
+# This magnetic Student task is forced to TerrainImporter ``terrain_type=plane``
+# by its teacher base class.  Isaac Lab 2.3.2 exposes that collider at this
+# current path; generator terrain would instead use /World/ground/terrain/mesh.
+HALL_GROUND_FILTER = ["/World/ground/terrain/GroundPlane/CollisionPlane"]
+HALL_GENERATOR_GROUND_FILTER = ["/World/ground/terrain/mesh"]
+HALL_SPATIAL_PATCH_FILTER = [
+    "{ENV_REGEX_NS}/FrictionHighStart/geometry/mesh",
+    "{ENV_REGEX_NS}/FrictionLow/geometry/mesh",
+    "{ENV_REGEX_NS}/FrictionHighEnd/geometry/mesh",
+]
+
+# Dedicated Hall-foot terrain curriculum.  Difficulty is intentionally capped
+# below Isaac Lab's generic rough-terrain maximum: a 29-DoF G1 with a 10 mm
+# compliant sole first learns 0--11 degree ramps and 2--10 cm stairs.  Flat,
+# ascent and descent are equally represented so Hall temporal features cannot
+# memorize one terrain direction or one static magnetic baseline.
+HALL_SLOPE_STAIRS_TERRAINS_CFG = terrain_gen.TerrainGeneratorCfg(
+    size=(8.0, 8.0),
+    border_width=12.0,
+    num_rows=6,
+    num_cols=5,
+    horizontal_scale=0.05,
+    vertical_scale=0.005,
+    slope_threshold=0.75,
+    difficulty_range=(0.0, 1.0),
+    use_cache=False,
+    sub_terrains={
+        "flat": terrain_gen.MeshPlaneTerrainCfg(proportion=0.20),
+        "slope_up": terrain_gen.HfPyramidSlopedTerrainCfg(
+            proportion=0.20,
+            slope_range=(0.0, 0.20),
+            platform_width=2.5,
+            border_width=0.25,
+        ),
+        "slope_down": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
+            proportion=0.20,
+            slope_range=(0.0, 0.20),
+            platform_width=2.5,
+            border_width=0.25,
+        ),
+        "stairs_up": terrain_gen.MeshPyramidStairsTerrainCfg(
+            proportion=0.20,
+            step_height_range=(0.02, 0.10),
+            step_width=0.35,
+            platform_width=2.5,
+            border_width=1.0,
+            holes=False,
+        ),
+        "stairs_down": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
+            proportion=0.20,
+            step_height_range=(0.02, 0.10),
+            step_width=0.35,
+            platform_width=2.5,
+            border_width=1.0,
+            holes=False,
+        ),
+    },
+)
+MAGNETIZED_TPU_USD = str(
+    Path(__file__).resolve().parents[5]
+    / "assets"
+    / "meshes"
+    / "tpu_sole_a40_grid35.usd"
+)
+
+
+@configclass
+class HallFootSceneCfg(RobotSceneCfg):
+    """Original scene plus current-API filtered contact data for Scheme A."""
+
+    left_hall_contact = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/left_ankle_roll_link",
+        history_length=1,
+        track_air_time=True,
+        track_contact_points=True,
+        track_friction_forces=True,
+        # Stair/ramp edges can generate more than 16 filtered contact points
+        # for one sole.  Keep enough headroom for the current Isaac Sim GPU
+        # contact backend; this is a buffer-size safeguard, not an extra
+        # observation channel.
+        max_contact_data_count_per_prim=64,
+        filter_prim_paths_expr=list(HALL_GROUND_FILTER),
+    )
+    right_hall_contact = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/right_ankle_roll_link",
+        history_length=1,
+        track_air_time=True,
+        track_contact_points=True,
+        track_friction_forces=True,
+        max_contact_data_count_per_prim=64,
+        filter_prim_paths_expr=list(HALL_GROUND_FILTER),
+    )
+
+
+def _friction_patch_cfg(
+    name: str,
+    *,
+    size_x: float,
+    size_y: float = 2.0,
+    center_x: float,
+    friction: float,
+    color: tuple[float, float, float],
+) -> AssetBaseCfg:
+    """Create one opaque, static, per-environment course collider."""
+    thickness = 0.08
+    return AssetBaseCfg(
+        prim_path=f"{{ENV_REGEX_NS}}/{name}",
+        spawn=sim_utils.CuboidCfg(
+            size=(size_x, size_y, thickness),
+            # CollisionAPI without RigidBodyAPI is a static collider in
+            # Isaac Sim 5.1.  This avoids thousands of dynamic ground bodies.
+            collision_props=sim_utils.CollisionPropertiesCfg(
+                collision_enabled=True,
+                contact_offset=0.003,
+                rest_offset=0.0,
+            ),
+            physics_material=sim_utils.RigidBodyMaterialCfg(
+                static_friction=friction,
+                dynamic_friction=friction,
+                restitution=0.0,
+                friction_combine_mode="multiply",
+                restitution_combine_mode="multiply",
+            ),
+            visual_material=sim_utils.PreviewSurfaceCfg(
+                diffuse_color=color,
+                roughness=0.88,
+                opacity=1.0,
+            ),
+        ),
+        # Every top face is exactly z=0.  The inherited dummy terrain is
+        # removed at the end of the spatial-task post-init, so no plane is
+        # hidden underneath these patches.
+        init_state=AssetBaseCfg.InitialStateCfg(
+            pos=(center_x, 0.0, -0.5 * thickness)
+        ),
+        collision_group=0,
+    )
+
+
+@configclass
+class HallSpatialFrictionSceneCfg(HallFootSceneCfg):
+    """Three physical high--low--high floor patches in every cloned env."""
+
+    friction_high_start = _friction_patch_cfg(
+        "FrictionHighStart",
+        size_x=2.0,
+        center_x=-1.0,
+        friction=0.90,
+        color=(0.05, 0.30, 0.78),
+    )
+    friction_low = _friction_patch_cfg(
+        "FrictionLow",
+        size_x=1.0,
+        center_x=0.5,
+        friction=0.16,
+        color=(0.95, 0.22, 0.04),
+    )
+    friction_high_end = _friction_patch_cfg(
+        "FrictionHighEnd",
+        size_x=2.0,
+        center_x=2.0,
+        friction=0.90,
+        color=(0.05, 0.30, 0.78),
+    )
+
+    left_hall_contact = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/left_ankle_roll_link",
+        history_length=1,
+        track_air_time=True,
+        track_contact_points=True,
+        track_friction_forces=True,
+        max_contact_data_count_per_prim=64,
+        filter_prim_paths_expr=list(HALL_SPATIAL_PATCH_FILTER),
+    )
+    right_hall_contact = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/right_ankle_roll_link",
+        history_length=1,
+        track_air_time=True,
+        track_contact_points=True,
+        track_friction_forces=True,
+        max_contact_data_count_per_prim=64,
+        filter_prim_paths_expr=list(HALL_SPATIAL_PATCH_FILTER),
+    )
+
+
+@configclass
+class HallSpatialMildFrictionSceneCfg(HallSpatialFrictionSceneCfg):
+    """Stage-S1 course: real but recoverable first low-grip transition."""
+
+    friction_low = _friction_patch_cfg(
+        "FrictionLow",
+        size_x=1.0,
+        center_x=0.5,
+        friction=0.45,
+        color=(0.95, 0.48, 0.04),
+    )
+
+
+@configclass
+class HallSpatialMediumFrictionSceneCfg(HallSpatialFrictionSceneCfg):
+    """Stage-S2 course between mild grip and the final mu=0.16 patch."""
+
+    friction_low = _friction_patch_cfg(
+        "FrictionLow",
+        size_x=1.0,
+        center_x=0.5,
+        friction=0.28,
+        color=(0.95, 0.34, 0.04),
+    )
+
+
+@configclass
+class HallSpatialMediumLongDemoSceneCfg(HallSpatialMediumFrictionSceneCfg):
+    """Long, opaque H--L--H course for steady-state visual comparison only.
+
+    Bounds in each environment's local X frame are exactly HighStart
+    ``[-6,0]``, Low ``[0,6]`` and HighEnd ``[6,18]``.  All three patches are
+    3.2 m wide, giving the robot and the camera much more lateral margin than
+    the 2.0 m-wide training course.  The ordinary short Medium/MediumDense
+    training scenes are intentionally untouched.
+    """
+
+    friction_high_start = _friction_patch_cfg(
+        "FrictionHighStart",
+        size_x=6.0,
+        size_y=3.2,
+        center_x=-3.0,
+        friction=0.90,
+        color=(0.05, 0.30, 0.78),
+    )
+    friction_low = _friction_patch_cfg(
+        "FrictionLow",
+        size_x=6.0,
+        size_y=3.2,
+        center_x=3.0,
+        friction=0.28,
+        color=(0.95, 0.72, 0.05),
+    )
+    friction_high_end = _friction_patch_cfg(
+        "FrictionHighEnd",
+        size_x=12.0,
+        size_y=3.2,
+        center_x=12.0,
+        friction=0.90,
+        color=(0.05, 0.30, 0.78),
+    )
+
+
+@configclass
+class HallSpatialMediumRetentionSceneCfg(HallSpatialMediumFrictionSceneCfg):
+    """Compact-clone long course used for high-speed retention training.
+
+    Every environment still owns an isolated collision group, so 2.5 m clone
+    spacing is valid even though the static floor meshes overlap in world
+    space.  This avoids large world coordinates degrading the small Hall-field
+    differences while providing roughly nine seconds of final-high exposure.
+    """
+
+    friction_high_start = _friction_patch_cfg(
+        "FrictionHighStart",
+        size_x=3.0,
+        center_x=-1.5,
+        friction=0.90,
+        color=(0.05, 0.30, 0.78),
+    )
+    friction_low = _friction_patch_cfg(
+        "FrictionLow",
+        size_x=2.0,
+        center_x=1.0,
+        friction=0.28,
+        color=(0.95, 0.34, 0.04),
+    )
+    friction_high_end = _friction_patch_cfg(
+        "FrictionHighEnd",
+        size_x=8.0,
+        center_x=6.0,
+        friction=0.90,
+        color=(0.05, 0.30, 0.78),
+    )
+
+
+@configclass
+class HallSlopeStairsSceneCfg(HallFootSceneCfg):
+    """Scheme-A Hall scene on a five-family ramp/stair generator."""
+
+    terrain = RobotSceneCfg(num_envs=1, env_spacing=2.5).terrain.replace(
+        terrain_type="generator",
+        terrain_generator=HALL_SLOPE_STAIRS_TERRAINS_CFG,
+        max_init_terrain_level=1,
+    )
+
+
+@configclass
+class HallUniformHighFrictionLongSceneCfg(HallSpatialFrictionSceneCfg):
+    """Forty-metre opaque high-friction course for backbone training.
+
+    The legacy filter prim names are retained so detailed Hall mechanics and
+    contact-point rewards use the same code path as H--L--H.  All three
+    colliders are physically and visually identical ``mu=0.90`` blue ground;
+    there is no hidden material transition in this diagnostic task.
+    """
+
+    friction_high_start = _friction_patch_cfg(
+        "FrictionHighStart",
+        size_x=8.0,
+        size_y=3.2,
+        center_x=-4.0,
+        friction=0.90,
+        color=(0.05, 0.30, 0.78),
+    )
+    friction_low = _friction_patch_cfg(
+        "FrictionLow",
+        size_x=12.0,
+        size_y=3.2,
+        center_x=6.0,
+        friction=0.90,
+        color=(0.05, 0.30, 0.78),
+    )
+    friction_high_end = _friction_patch_cfg(
+        "FrictionHighEnd",
+        size_x=20.0,
+        size_y=3.2,
+        center_x=22.0,
+        friction=0.90,
+        color=(0.05, 0.30, 0.78),
+    )
+
+
+def _magnetized_tpu_asset_cfg(side: str, hall_cfg: HallFootSensorCfg) -> DeformableObjectCfg:
+    """Build the sole's only deformable layer; the PCB enclosure stays rigid."""
+    return DeformableObjectCfg(
+        prim_path=f"{{ENV_REGEX_NS}}/{side}_magnetized_tpu",
+        spawn=DeformableUsdFileCfg(
+            usd_path=MAGNETIZED_TPU_USD,
+            deformable_props=sim_utils.DeformableBodyPropertiesCfg(
+                deformable_enabled=True,
+                kinematic_enabled=False,
+                self_collision=hall_cfg.tpu_self_collision,
+                solver_position_iteration_count=hall_cfg.tpu_solver_position_iteration_count,
+                simulation_hexahedral_resolution=hall_cfg.tpu_simulation_hexahedral_resolution,
+                collision_simplification=True,
+                collision_simplification_force_conforming=True,
+                contact_offset=hall_cfg.tpu_contact_offset,
+                rest_offset=hall_cfg.tpu_rest_offset,
+            ),
+            physics_material=sim_utils.DeformableBodyMaterialCfg(
+                density=hall_cfg.tpu_density,
+                dynamic_friction=hall_cfg.tpu_dynamic_friction,
+                youngs_modulus=hall_cfg.tpu_youngs_modulus,
+                poissons_ratio=hall_cfg.tpu_poisson_ratio,
+                elasticity_damping=hall_cfg.tpu_damping,
+                damping_scale=1.0,
+            ),
+            visual_material=sim_utils.PreviewSurfaceCfg(
+                diffuse_color=(0.12, 0.32, 0.72) if side == "left" else (0.18, 0.58, 0.36),
+                roughness=0.75,
+                opacity=1.0,
+            ),
+        ),
+        # The attachment action relocates every node from this harmless staging
+        # pose to the current foot pose before the first physics step.
+        init_state=DeformableObjectCfg.InitialStateCfg(pos=(0.0, 0.0, 1.0)),
+        debug_vis=False,
+    )
+
+
+_DEFORMABLE_HALL_CFG = HallFootSensorCfg(implementation_mode="deformable")
+
+
+@configclass
+class HallFootDeformableSceneCfg(HallFootSceneCfg):
+    """Scheme-B scene: rigid foot/PCB assembly plus one deformable TPU per foot."""
+
+    left_magnetized_tpu = _magnetized_tpu_asset_cfg("left", _DEFORMABLE_HALL_CFG)
+    right_magnetized_tpu = _magnetized_tpu_asset_cfg("right", _DEFORMABLE_HALL_CFG)
+
+
+@configclass
+class HallDeformableActionsCfg(ActionsCfg):
+    """Normal 29-DoF policy action plus a zero-dimensional attachment hook."""
+
+    hall_tpu_attachment = HallSoleAttachmentActionCfg(
+        asset_name="robot",
+        hall_cfg=_DEFORMABLE_HALL_CFG,
+    )
 
 
 def strip_foot_obs_terms(group: ObsGroup) -> None:
@@ -2130,6 +2529,92 @@ class TractionTeacherCommandsCfg(CommandsCfg):
 
 
 @configclass
+class HallSafetyEnvelopeCommandsCfg(CommandsCfg):
+    """Deploy-safe stop/crawl/cruise commands for Hall-only PPO hardening.
+
+    Command samples are deliberately independent of the hidden ground
+    material.  The 1864-D actor must therefore derive friction adaptation from
+    Hall Bx/By/Bz histories, packet health and proprioception, rather than
+    learning a command-to-friction shortcut.  Contact forces, true ``mu`` and
+    slip remain unavailable to the actor.
+    """
+
+    base_velocity = mdp.HallSafetyEnvelopeVelocityCommandCfg(
+        asset_name="robot",
+        # Re-sample inside one rollout so deceleration, crawl and re-accel are
+        # learned transitions rather than reset-only behaviours.
+        resampling_time_range=(2.5, 5.0),
+        rel_standing_envs=0.0,
+        rel_spin_envs=0.0,
+        min_spin_ang_vel=0.0,
+        rel_heading_envs=1.0,
+        heading_command=False,
+        debug_vis=False,
+        ranges=mdp.HallSafetyEnvelopeVelocityCommandCfg.Ranges(
+            lin_vel_x=(0.0, 0.90),
+            lin_vel_y=(0.0, 0.0),
+            ang_vel_z=(0.0, 0.0),
+        ),
+        limit_ranges=mdp.HallSafetyEnvelopeVelocityCommandCfg.Ranges(
+            lin_vel_x=(0.0, 0.90),
+            lin_vel_y=(0.0, 0.0),
+            ang_vel_z=(0.0, 0.0),
+        ),
+        stop_fraction=0.18,
+        crawl_fraction=0.32,
+        crawl_speed_range=(0.20, 0.35),
+        cruise_speed_range=(0.45, 0.90),
+        # Compatibility fields for inherited switch configuration.  The
+        # HallSafetyEnvelope command does not read them for sampling.
+        high_speed_range=(0.45, 0.90),
+        high_speed_regimes=(0, 2),
+    )
+
+
+@configclass
+class HallZeroFallEnvelopeCommandsCfg(CommandsCfg):
+    """Safety-recovery command distribution centred on the acceptance speed.
+
+    The first command-envelope pass proved that crawl and stop must be part of
+    the actor's training support, but its broad 0.45--0.90 m/s cruise range
+    under-sampled the fixed 0.8 m/s acceptance request.  This recovery stage
+    keeps those safety commands while concentrating normal cruise samples near
+    the requested real-robot walking band.  Sampling remains independent of
+    hidden friction; the actor still has to use Hall/proprioceptive evidence
+    to choose a stable response to material changes.
+    """
+
+    base_velocity = mdp.HallSafetyEnvelopeVelocityCommandCfg(
+        asset_name="robot",
+        resampling_time_range=(1.75, 3.50),
+        rel_standing_envs=0.0,
+        rel_spin_envs=0.0,
+        min_spin_ang_vel=0.0,
+        rel_heading_envs=1.0,
+        heading_command=False,
+        debug_vis=False,
+        ranges=mdp.HallSafetyEnvelopeVelocityCommandCfg.Ranges(
+            lin_vel_x=(0.0, 0.86),
+            lin_vel_y=(0.0, 0.0),
+            ang_vel_z=(0.0, 0.0),
+        ),
+        limit_ranges=mdp.HallSafetyEnvelopeVelocityCommandCfg.Ranges(
+            lin_vel_x=(0.0, 0.86),
+            lin_vel_y=(0.0, 0.0),
+            ang_vel_z=(0.0, 0.0),
+        ),
+        stop_fraction=0.12,
+        crawl_fraction=0.26,
+        crawl_speed_range=(0.20, 0.35),
+        cruise_speed_range=(0.70, 0.85),
+        # Compatibility only; HallSafetyEnvelopeVelocityCommand samples from
+        # cruise_speed_range, not from a hidden friction regime.
+        high_speed_range=(0.70, 0.85),
+        high_speed_regimes=(0, 2),
+    )
+
+
+@configclass
 class TractionTeacherEventCfg(EventCfg):
     """Only coherent teacher friction is randomized in the first stage."""
 
@@ -2848,6 +3333,66 @@ class RobotFootTractionLateralGuardTeacherPlayEnvCfg(
 
 
 # ---------------------------------------------------------------------------
+# Privileged terrain Teacher: ramps/stairs are simulation-only supervision
+# ---------------------------------------------------------------------------
+
+
+@configclass
+class RobotFootTractionSlopeStairsTeacherEnvCfg(
+    RobotFootTractionLateralGuardTeacherEnvCfg
+):
+    """Curriculum Teacher for the five-family Hall ramp/stair terrain.
+
+    The 641-D actor keeps the existing privileged contact/friction stream and
+    is used only to generate actions for distillation.  The deployed magnetic
+    Student remains 1864-D and never receives terrain identity, contact force,
+    terrain height or friction.
+    """
+
+    curriculum: CurriculumCfg = TractionAdaptiveCurriculumCfg()
+
+    def __post_init__(self):
+        super().__post_init__()
+        # The inherited Teacher deliberately forces a plane.  Restore the
+        # dedicated terrain generator here and begin at gentle rows; the
+        # existing distance curriculum promotes successful environments.
+        self.scene.terrain.terrain_type = "generator"
+        self.scene.terrain.terrain_generator = (
+            HALL_SLOPE_STAIRS_TERRAINS_CFG.replace()
+        )
+        self.scene.terrain.max_init_terrain_level = 1
+        self.scene.terrain.terrain_generator.curriculum = True
+        self.curriculum.terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
+        self.scene.height_scanner.mesh_prim_paths = [
+            "/World/ground/terrain/mesh"
+        ]
+        # Avoid an abrupt 1.05 m/s restart while the old flat policy is first
+        # learning slope posture and stair clearance.  The final Student
+        # governor still owns friction-adaptive speed at deployment time.
+        self.commands.base_velocity.high_speed_range = (0.45, 0.85)
+
+
+@configclass
+class RobotFootTractionSlopeStairsTeacherPlayEnvCfg(
+    RobotFootTractionSlopeStairsTeacherEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 25
+        self.scene.terrain.max_init_terrain_level = (
+            self.scene.terrain.terrain_generator.num_rows - 1
+        )
+        self.scene.terrain.terrain_generator.curriculum = False
+        self.curriculum.terrain_levels = None
+        self.scene.terrain.visual_material = sim_utils.PreviewSurfaceCfg(
+            diffuse_color=(0.34, 0.27, 0.16),
+            roughness=0.88,
+            opacity=1.0,
+        )
+        self.commands.base_velocity.resampling_time_range = (1.0e9, 1.0e9)
+
+
+# ---------------------------------------------------------------------------
 # Joint speed/path continuation: recover 1.0-m/s high-grip tracking
 # ---------------------------------------------------------------------------
 
@@ -3137,6 +3682,10 @@ class RobotFootTractionMotionStressTeacherPlayEnvCfg(
 
 @configclass
 class TractionMagneticStudentEventCfg(TractionRobustTeacherEventCfg):
+    hall_foot_sensor_reset = EventTerm(
+        func=mdp.reset_hall_foot_sensor,
+        mode="reset",
+    )
     magnetic_array_proxy = EventTerm(
         func=mdp.randomize_magnetic_array_proxy,
         mode="reset",
@@ -3208,6 +3757,38 @@ class TractionMagneticSwitchEventCfg(TractionMagneticStudentEventCfg):
 
 
 @configclass
+class TractionMagneticSwitchTrainingEventCfg(TractionMagneticSwitchEventCfg):
+    """Asynchronous two-surface curriculum for Hall-only PPO training.
+
+    The evaluation task intentionally switches every environment at the same
+    instant so phase plots are directly comparable.  Training with that
+    global clock would leave a spurious time correlation.  This variant
+    samples each environment's switch time independently; the deployable
+    actor must therefore respond to its own Hall/proprioceptive history rather
+    than episode time or a shared simulator event.
+    """
+
+    friction_switch = EventTerm(
+        func=mdp.two_surface_friction_with_buffer,
+        mode="interval",
+        interval_range_s=(2.5, 5.5),
+        is_global_time=False,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            "static_friction_range": (0.08, 1.20),
+            "dynamic_friction_range": (0.08, 1.20),
+            "restitution_range": (0.0, 0.04),
+            "num_buckets": 64,
+            "make_consistent": True,
+            "low_friction_range": (0.08, 0.20),
+            "high_friction_range": (0.80, 1.20),
+            "initial_high_probability": 0.50,
+            "flip_existing": True,
+        },
+    )
+
+
+@configclass
 class FootTractionMagneticObservationsCfg(ObservationsCfg):
     @configclass
     class PolicyCfg(ObsGroup):
@@ -3240,27 +3821,55 @@ class FootTractionMagneticObservationsCfg(ObservationsCfg):
         )
         last_action = ObsTerm(func=mdp.last_action, history_length=5)
         foot_magnetic_array = ObsTerm(
-            func=mdp.magnetic_array_proxy,
-            params={"sensor_cfg": FOOT_SENSOR_CFG},
+            func=mdp.hall_magnetic_array,
+            params={
+                "hall_cfg": HallFootSensorCfg(),
+                "asset_cfg": HALL_FOOT_ASSET_CFG,
+                "contact_sensor_cfg": FOOT_SENSOR_CFG,
+                "left_contact_sensor_cfg": HALL_LEFT_CONTACT_CFG,
+                "right_contact_sensor_cfg": HALL_RIGHT_CONTACT_CFG,
+            },
             clip=(-6.0, 6.0),
             history_length=15,
         )
         foot_sample_period_lr = ObsTerm(
-            func=mdp.magnetic_sample_period_lr,
-            params={"sensor_cfg": FOOT_SENSOR_CFG},
+            func=mdp.hall_sample_period_lr,
+            params={
+                "hall_cfg": HallFootSensorCfg(),
+                "asset_cfg": HALL_FOOT_ASSET_CFG,
+                "contact_sensor_cfg": FOOT_SENSOR_CFG,
+                "left_contact_sensor_cfg": HALL_LEFT_CONTACT_CFG,
+                "right_contact_sensor_cfg": HALL_RIGHT_CONTACT_CFG,
+            },
             clip=(0.001, 0.25),
             history_length=15,
         )
         foot_sensor_valid_lr = ObsTerm(
-            func=mdp.magnetic_sensor_valid_lr,
-            params={"sensor_cfg": FOOT_SENSOR_CFG},
+            func=mdp.hall_sensor_valid_lr,
+            params={
+                "hall_cfg": HallFootSensorCfg(),
+                "asset_cfg": HALL_FOOT_ASSET_CFG,
+                "contact_sensor_cfg": FOOT_SENSOR_CFG,
+                "left_contact_sensor_cfg": HALL_LEFT_CONTACT_CFG,
+                "right_contact_sensor_cfg": HALL_RIGHT_CONTACT_CFG,
+            },
             clip=(0.0, 1.0),
         )
         foot_sensor_age_lr = ObsTerm(
-            func=mdp.magnetic_sensor_age_lr,
-            params={"sensor_cfg": FOOT_SENSOR_CFG, "age_scale": 0.25},
+            func=mdp.hall_sensor_age_lr,
+            params={
+                "hall_cfg": HallFootSensorCfg(),
+                "asset_cfg": HALL_FOOT_ASSET_CFG,
+                "contact_sensor_cfg": FOOT_SENSOR_CFG,
+                "left_contact_sensor_cfg": HALL_LEFT_CONTACT_CFG,
+                "right_contact_sensor_cfg": HALL_RIGHT_CONTACT_CFG,
+                "age_scale": 0.25,
+            },
             clip=(0.0, 1.0),
         )
+        # Optional comparison channel configured by the environment.  It is
+        # absent by default so the audited 1864-D magnetic actor is unchanged.
+        foot_contact_force = None
 
         def __post_init__(self):
             self.history_length = None
@@ -3283,12 +3892,77 @@ class FootTractionMagneticObservationsCfg(ObservationsCfg):
 class RobotFootTractionMagneticStudentEnvCfg(
     RobotFootTractionLateralGuardTeacherEnvCfg
 ):
+    """Magnetic walking task with contact/hall/both output selection.
+
+    ``sensor_output_mode='hall'`` preserves the deployed 1864-D actor schema.
+    ``contact`` and ``both`` intentionally change policy dimensions and are for
+    ablation/calibration runs, not direct loading of an 1864-D checkpoint.
+    """
+
+    sensor_output_mode: str = "hall"
+    use_legacy_magnetic_proxy: bool = False
+    hall_sensor_cfg: HallFootSensorCfg = HallFootSensorCfg(
+        enable_domain_randomization=True
+    )
+
+    scene: RobotSceneCfg = HallFootSceneCfg(num_envs=4096, env_spacing=2.5)
     observations: ObservationsCfg = FootTractionMagneticObservationsCfg()
     events: EventCfg = TractionMagneticStudentEventCfg()
 
     def __post_init__(self):
         super().__post_init__()
+        if self.sensor_output_mode not in ("contact", "hall", "both"):
+            raise ValueError("sensor_output_mode must be 'contact', 'hall', or 'both'")
+        if self.hall_sensor_cfg.num_hall_sensors != 15:
+            raise ValueError(
+                "this deployed magnetic task requires 15 Hall sites; other counts are supported by HallFootSensor "
+                "but need a matching observation/network schema"
+            )
+        self.scene.left_hall_contact.update_period = self.sim.dt
+        self.scene.right_hall_contact.update_period = self.sim.dt
+
+        if self.use_legacy_magnetic_proxy:
+            self.events.hall_foot_sensor_reset = None
+            self.scene.left_hall_contact = None
+            self.scene.right_hall_contact = None
+            self.observations.policy.foot_magnetic_array.func = mdp.magnetic_array_proxy
+            self.observations.policy.foot_magnetic_array.params = {"sensor_cfg": FOOT_SENSOR_CFG}
+            self.observations.policy.foot_sample_period_lr.func = mdp.magnetic_sample_period_lr
+            self.observations.policy.foot_sample_period_lr.params = {"sensor_cfg": FOOT_SENSOR_CFG}
+            self.observations.policy.foot_sensor_valid_lr.func = mdp.magnetic_sensor_valid_lr
+            self.observations.policy.foot_sensor_valid_lr.params = {"sensor_cfg": FOOT_SENSOR_CFG}
+            # The Motion variant intentionally reuses these last two actor
+            # slots for proprioceptive lateral-motion feedback.  Replace only
+            # the ordinary Hall age term, not that schema-preserving override.
+            if self.observations.policy.foot_sensor_age_lr.func is mdp.hall_sensor_age_lr:
+                self.observations.policy.foot_sensor_age_lr.func = mdp.magnetic_sensor_age_lr
+                self.observations.policy.foot_sensor_age_lr.params = {
+                    "sensor_cfg": FOOT_SENSOR_CFG,
+                    "age_scale": 0.25,
+                }
+        else:
+            # The legacy proxy remains available, but its episode-level DR
+            # buffers are unnecessary for the physical Hall path.
+            self.events.magnetic_array_proxy = None
+
+        if self.sensor_output_mode in ("contact", "both"):
+            self.observations.policy.foot_contact_force = ObsTerm(
+                func=mdp.foot_force_vector,
+                params={"sensor_cfg": FOOT_SENSOR_CFG, "scale": 0.01},
+                clip=(-6.0, 6.0),
+                history_length=15,
+            )
+        if self.sensor_output_mode == "contact":
+            self.events.hall_foot_sensor_reset = None
+            self.scene.left_hall_contact = None
+            self.scene.right_hall_contact = None
+            self.observations.policy.foot_magnetic_array = None
+            self.observations.policy.foot_sample_period_lr = None
+            self.observations.policy.foot_sensor_valid_lr = None
+            self.observations.policy.foot_sensor_age_lr = None
         self.observations.policy.enable_corruption = True
+        if not self.use_legacy_magnetic_proxy and self.sensor_output_mode in ("hall", "both"):
+            sync_hall_sensor_cfg_to_policy_terms(self.observations, self.hall_sensor_cfg)
 
 
 @configclass
@@ -3297,7 +3971,266 @@ class RobotFootTractionMagneticStudentPlayEnvCfg(
 ):
     def __post_init__(self):
         super().__post_init__()
+        # Deterministic nominal Hall mechanics for reproducible selection.
+        # Robustness matrices explicitly re-enable DR/fault profiles instead
+        # of silently changing every evaluation rollout.
+        self.hall_sensor_cfg.enable_domain_randomization = False
+        sync_hall_sensor_cfg_to_policy_terms(self.observations, self.hall_sensor_cfg)
         self.scene.num_envs = 32
+        self.commands.base_velocity.resampling_time_range = (1.0e9, 1.0e9)
+
+
+@configclass
+class RobotFootTractionMagneticSlopeStairsEnvCfg(
+    RobotFootTractionMagneticStudentEnvCfg
+):
+    """Hall-only magnetic-foot training task on ramps and stairs.
+
+    The actor schema remains exactly 1864 -> 29.  Terrain identity, height
+    scans, contact force and ground friction remain critic/mechanics data and
+    never enter the deployable policy observation.
+    """
+
+    scene: RobotSceneCfg = HallSlopeStairsSceneCfg(num_envs=2048, env_spacing=2.5)
+    curriculum: CurriculumCfg = TractionAdaptiveCurriculumCfg()
+
+    def __post_init__(self):
+        super().__post_init__()
+        # The inherited traction task deliberately selects a flat plane.  This
+        # dedicated subclass restores generator terrain after that safety
+        # default and updates the filtered Hall contact paths atomically.
+        self.scene.terrain.terrain_type = "generator"
+        self.scene.terrain.terrain_generator = HALL_SLOPE_STAIRS_TERRAINS_CFG.replace()
+        self.scene.terrain.max_init_terrain_level = 1
+        self.scene.terrain.terrain_generator.curriculum = True
+        self.curriculum.terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
+        self.scene.left_hall_contact.filter_prim_paths_expr = list(
+            HALL_GENERATOR_GROUND_FILTER
+        )
+        self.scene.right_hall_contact.filter_prim_paths_expr = list(
+            HALL_GENERATOR_GROUND_FILTER
+        )
+        self.scene.height_scanner.mesh_prim_paths = ["/World/ground/terrain/mesh"]
+
+
+@configclass
+class RobotFootTractionMagneticSlopeStairsPlayEnvCfg(
+    RobotFootTractionMagneticSlopeStairsEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        # Five environments map one-to-one to flat, uphill, downhill,
+        # ascending stairs and descending stairs for visual comparison.
+        self.scene.num_envs = 5
+        self.scene.terrain.max_init_terrain_level = (
+            self.scene.terrain.terrain_generator.num_rows - 1
+        )
+        self.scene.terrain.terrain_generator.curriculum = False
+        self.curriculum.terrain_levels = None
+        # Opaque earth tone keeps stair edges readable and avoids the
+        # transparent-layer ambiguity seen in the earlier sole demo.
+        self.scene.terrain.visual_material = sim_utils.PreviewSurfaceCfg(
+            diffuse_color=(0.34, 0.27, 0.16),
+            roughness=0.88,
+            opacity=1.0,
+        )
+        self.hall_sensor_cfg.enable_domain_randomization = False
+        self.hall_sensor_cfg.enable_debug_vis = True
+        self.hall_sensor_cfg.debug_vis_max_envs = 5
+        sync_hall_sensor_cfg_to_policy_terms(self.observations, self.hall_sensor_cfg)
+        self.commands.base_velocity.resampling_time_range = (1.0e9, 1.0e9)
+
+
+@configclass
+class TractionMagneticSlopeStairsFrictionEventCfg(
+    TractionMagneticStudentEventCfg
+):
+    """Coherent friction randomization mu in [0.2, 1.0] for ramps/stairs.
+
+    The high-friction stratum (0.75, 1.0], which contains the 0.8 reference
+    surface, is slightly over-weighted so the policy keeps a solid nominal
+    walking baseline while still seeing 0.2-level slip on slopes and steps.
+    """
+
+    physics_material = EventTerm(
+        func=mdp.randomize_teacher_friction_with_buffer,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            "static_friction_range": (0.2, 1.0),
+            "dynamic_friction_range": (0.2, 1.0),
+            "restitution_range": (0.0, 0.04),
+            "num_buckets": 48,
+            "make_consistent": True,
+            "teacher_friction_ranges": ((0.2, 0.45), (0.45, 0.75), (0.75, 1.0)),
+            "regime_probabilities": (0.25, 0.40, 0.35),
+        },
+    )
+    physics_material_reset = EventTerm(
+        func=mdp.randomize_teacher_friction_with_buffer,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            "static_friction_range": (0.2, 1.0),
+            "dynamic_friction_range": (0.2, 1.0),
+            "restitution_range": (0.0, 0.04),
+            "num_buckets": 48,
+            "make_consistent": True,
+            "teacher_friction_ranges": ((0.2, 0.45), (0.45, 0.75), (0.75, 1.0)),
+            "regime_probabilities": (0.25, 0.40, 0.35),
+        },
+    )
+    # AnchoredPPO needs the privileged H/L stage even without spatial patches.
+    # These terms run after the friction terms within startup/reset mode, so
+    # the regime buffer they read is already the current episode's mu.  The
+    # top friction stratum (mu in (0.75, 1.0], containing the 0.8 reference)
+    # keeps the frozen-Teacher anchor; lower-mu rows stay free to adapt.
+    spatial_stage_sync = EventTerm(
+        func=mdp.sync_uniform_friction_course_stage,
+        mode="startup",
+        params={"high_regime_indices": (2,)},
+    )
+    spatial_stage_reset = EventTerm(
+        func=mdp.sync_uniform_friction_course_stage,
+        mode="reset",
+        params={"high_regime_indices": (2,)},
+    )
+
+
+@configclass
+class RobotFootTractionMagneticMotionSlopeStairsEnvCfg(
+    RobotFootTractionMagneticSlopeStairsEnvCfg
+):
+    """Ramps/stairs training task with the deployable 1864-D motion ABI.
+
+    This is a separate model family from ``transition_retention_r5``: the
+    actor schema is identical (1864 -> 29, foot Hall + [body_vy,
+    relative_heading]) but the terrain is generator ramps/stairs and the
+    training/checkpoint identity is its own.
+    """
+
+    # TEMP-FIX proprio480 experiment (2026-08-14): the referenced class is
+    # defined below this class in the file, so a module-level default raises
+    # NameError at import.  Resolve it in __post_init__ instead; the final
+    # configuration value is identical.  Revert when the class ordering is
+    # fixed by the owning workflow.
+    observations: ObservationsCfg = FootTractionMagneticObservationsCfg()
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.observations = FootTractionMagneticMotionObservationsCfg()
+        self.events = TractionMagneticSlopeStairsFrictionEventCfg()
+
+
+@configclass
+class RobotFootTractionMagneticMotionSlopeStairsPlayEnvCfg(
+    RobotFootTractionMagneticMotionSlopeStairsEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        # Five environments map one-to-one to flat, uphill, downhill,
+        # ascending stairs and descending stairs for visual comparison.
+        self.scene.num_envs = 5
+        self.scene.terrain.max_init_terrain_level = (
+            self.scene.terrain.terrain_generator.num_rows - 1
+        )
+        self.scene.terrain.terrain_generator.curriculum = False
+        self.curriculum.terrain_levels = None
+        self.scene.terrain.visual_material = sim_utils.PreviewSurfaceCfg(
+            diffuse_color=(0.34, 0.27, 0.16),
+            roughness=0.88,
+            opacity=1.0,
+        )
+        self.hall_sensor_cfg.enable_domain_randomization = False
+        self.hall_sensor_cfg.enable_debug_vis = True
+        self.hall_sensor_cfg.debug_vis_max_envs = 5
+        sync_hall_sensor_cfg_to_policy_terms(self.observations, self.hall_sensor_cfg)
+        self.commands.base_velocity.resampling_time_range = (1.0e9, 1.0e9)
+
+
+@configclass
+class RobotFootTractionMagneticStudentDeformableEnvCfg(
+    RobotFootTractionMagneticStudentEnvCfg
+):
+    """Scheme-B geometry-gated audit task with a deforming magnetized TPU layer.
+
+    The rigid robot foot and rigid PCB enclosure are represented by the ankle
+    link attachment boundary.  There is no connector layer.  Only
+    ``left/right_magnetized_tpu`` are PhysX deformable bodies.  This task is
+    intentionally small because Isaac Sim 5.1 / Isaac Lab 2.3.2 deformables
+    require ``replicate_physics=False``.  The strict cooked-thickness check is
+    intentionally enabled: use Scheme A for PPO until an explicit 10 mm volume
+    mesh passes the Scheme-B platen validation, then enable residual fine-tuning.
+    """
+
+    hall_sensor_cfg: HallFootSensorCfg = HallFootSensorCfg(
+        implementation_mode="deformable",
+        enable_domain_randomization=True,
+    )
+    scene: RobotSceneCfg = HallFootDeformableSceneCfg(
+        num_envs=16,
+        env_spacing=2.5,
+        replicate_physics=False,
+    )
+    actions: ActionsCfg = HallDeformableActionsCfg()
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.hall_sensor_cfg.implementation_mode != "deformable":
+            raise ValueError("Scheme-B task requires implementation_mode='deformable'")
+        if not Path(MAGNETIZED_TPU_USD).is_file():
+            raise FileNotFoundError(
+                f"magnetized TPU USD is missing: {MAGNETIZED_TPU_USD}; run scripts/assets/export_tpu_sole_mesh.py "
+                "and Isaac Lab scripts/tools/convert_mesh.py"
+            )
+        self.scene.replicate_physics = False
+        self.actions.hall_tpu_attachment.hall_cfg = self.hall_sensor_cfg
+
+        # A smaller physics step is used for the 10 mm, 1.7 MPa layer while
+        # preserving the original 50 Hz policy period (0.0025 * 8 = 0.02 s).
+        self.sim.dt = 0.0025
+        self.decimation = 8
+        self.scene.contact_forces.update_period = self.sim.dt
+        self.scene.left_hall_contact.update_period = self.sim.dt
+        self.scene.right_hall_contact.update_period = self.sim.dt
+
+        for asset_cfg in (
+            self.scene.left_magnetized_tpu,
+            self.scene.right_magnetized_tpu,
+        ):
+            props = asset_cfg.spawn.deformable_props
+            material = asset_cfg.spawn.physics_material
+            props.self_collision = self.hall_sensor_cfg.tpu_self_collision
+            props.solver_position_iteration_count = (
+                self.hall_sensor_cfg.tpu_solver_position_iteration_count
+            )
+            props.simulation_hexahedral_resolution = (
+                self.hall_sensor_cfg.tpu_simulation_hexahedral_resolution
+            )
+            props.contact_offset = self.hall_sensor_cfg.tpu_contact_offset
+            props.rest_offset = self.hall_sensor_cfg.tpu_rest_offset
+            material.density = self.hall_sensor_cfg.tpu_density
+            material.dynamic_friction = self.hall_sensor_cfg.tpu_dynamic_friction
+            material.youngs_modulus = self.hall_sensor_cfg.tpu_youngs_modulus
+            material.poissons_ratio = self.hall_sensor_cfg.tpu_poisson_ratio
+            material.elasticity_damping = self.hall_sensor_cfg.tpu_damping
+
+
+@configclass
+class RobotFootTractionMagneticStudentDeformablePlayEnvCfg(
+    RobotFootTractionMagneticStudentDeformableEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 2
+        self.hall_sensor_cfg.enable_domain_randomization = False
+        # Viewing only: Isaac Sim 5.1's automatic hexahedral cooker currently
+        # inflates the thin CAD volume.  The adapter emits a warning and all
+        # resulting deformation values must be treated as diagnostic.
+        self.hall_sensor_cfg.deformable_strict_geometry_check = False
+        self.hall_sensor_cfg.enable_debug_vis = True
+        self.hall_sensor_cfg.debug_vis_max_envs = 2
+        sync_hall_sensor_cfg_to_policy_terms(self.observations, self.hall_sensor_cfg)
         self.commands.base_velocity.resampling_time_range = (1.0e9, 1.0e9)
 
 
@@ -3331,6 +4264,28 @@ class FootTractionMagneticMotionObservationsCfg(
 
 
 @configclass
+class FootTractionHighSpeedBackbone482ObservationsCfg(
+    FootTractionMagneticMotionObservationsCfg
+):
+    """Keep the full Hall ABI and add an isolated 482-D high-speed group.
+
+    ``high_speed_policy`` is exactly the legacy 480-D proprioceptive history
+    followed by current ``[body_vy, relative_heading]``.  The complete
+    ``policy[1864]`` group remains available for the Hall traction branch and
+    for paired evaluator diagnostics; no force/contact/mu/slip/stage term is
+    present in the 482-D actor group.
+    """
+
+    @configclass
+    class HighSpeedPolicyCfg(FootTractionMagneticMotionObservationsCfg.PolicyCfg):
+        foot_magnetic_array = None
+        foot_sample_period_lr = None
+        foot_sensor_valid_lr = None
+
+    high_speed_policy: HighSpeedPolicyCfg = HighSpeedPolicyCfg()
+
+
+@configclass
 class RobotFootTractionMagneticMotionStudentEnvCfg(
     RobotFootTractionMagneticStudentEnvCfg
 ):
@@ -3344,21 +4299,1060 @@ class RobotFootTractionMagneticMotionSwitchStudentEnvCfg(
     """Deployable observation task for switch DAgger collection/evaluation."""
 
     events: EventCfg = TractionMagneticSwitchEventCfg()
+    # Contact/material values below are reward-only simulator signals.  The
+    # PolicyCfg remains the Hall/proprioception-only 1864-D deploy interface.
+    rewards: RewardsCfg = FootTractionMotionSwitchRewardsCfg()
 
     def __post_init__(self):
         super().__post_init__()
         self.commands.base_velocity.resampling_time_range = (1.0e9, 1.0e9)
         self.commands.base_velocity.high_speed_regimes = (0, 2)
-        self.commands.base_velocity.high_speed_range = (0.75, 1.00)
-        self.rewards.gait.weight = 0.40
-        self.rewards.gait.params["slow_period"] = 0.90
-        self.rewards.gait.params["fast_period"] = 0.55
-        self.rewards.gait.params["low_speed"] = 0.20
-        self.rewards.gait.params["high_speed"] = 1.00
-        self.rewards.track_lin_vel_xy.params["low_speed"] = 0.20
-        self.rewards.track_lin_vel_xy.params["high_speed"] = 1.00
-        self.rewards.traction_overspeed.params["low_speed"] = 0.20
-        self.rewards.traction_overspeed.params["high_speed"] = 1.00
+        # Keep the requested nominal speed inside the proven 0.8 m/s
+        # evaluation envelope.  High traction still asks for a substantially
+        # faster gait than low traction, while avoiding a speed-only solution
+        # that looks good in high-mu plots but is unsafe at the next switch.
+        self.commands.base_velocity.high_speed_range = (0.70, 0.90)
+        self.rewards.gait.weight = 4.00
+        self.rewards.gait.params["slow_period"] = 1.20
+        self.rewards.gait.params["fast_period"] = 0.60
+        self.rewards.gait.params["low_speed"] = 0.15
+        self.rewards.gait.params["high_speed"] = 0.90
+        self.rewards.track_lin_vel_xy.weight = 3.50
+        self.rewards.track_lin_vel_xy.params["std"] = 0.25
+        self.rewards.track_lin_vel_xy.params["low_speed"] = 0.15
+        self.rewards.track_lin_vel_xy.params["high_speed"] = 0.90
+        self.rewards.traction_overspeed.weight = -8.0
+        self.rewards.traction_overspeed.params["low_speed"] = 0.15
+        self.rewards.traction_overspeed.params["high_speed"] = 0.90
+        self.rewards.feet_slide.weight = -1.00
+        self.rewards.feet_anti_slip.weight = -0.80
+        self.rewards.termination_penalty.weight = -800.0
+        self.rewards.high_traction_underspeed.weight = -7.0
+        self.rewards.high_traction_underspeed.params["target_speed"] = 0.90
+
+
+@configclass
+class RobotFootTractionMagneticMotionSwitchTrainEnvCfg(
+    RobotFootTractionMagneticMotionSwitchStudentEnvCfg
+):
+    """PPO-only variant with per-environment asynchronous friction changes."""
+
+    events: EventCfg = TractionMagneticSwitchTrainingEventCfg()
+
+
+@configclass
+class RobotFootTractionMagneticMotionSwitchWarmupEnvCfg(
+    RobotFootTractionMagneticMotionSwitchTrainEnvCfg
+):
+    """Safety curriculum before exposing the Hall actor to μ=0.08.
+
+    This is not an easier evaluation: it is a short learning stage that lets
+    the warm-started gait associate measured magnetic temporal changes with a
+    slower, longer-period gait before the extreme low-friction interval is
+    introduced.  The final candidate is always retrained/evaluated on the
+    full 0.08--0.20 regime in ``...SwitchTrain``.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        for event in (
+            self.events.physics_material,
+            self.events.physics_material_reset,
+            self.events.friction_switch,
+        ):
+            event.params["low_friction_range"] = (0.22, 0.35)
+        self.events.friction_switch.interval_range_s = (3.0, 5.5)
+
+
+@configclass
+class RobotFootTractionMagneticMotionSwitchBridgeEnvCfg(
+    RobotFootTractionMagneticMotionSwitchTrainEnvCfg
+):
+    """Intermediate low-traction stage between warmup and μ=0.08 training."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        for event in (
+            self.events.physics_material,
+            self.events.physics_material_reset,
+            self.events.friction_switch,
+        ):
+            event.params["low_friction_range"] = (0.14, 0.26)
+        self.events.friction_switch.interval_range_s = (2.8, 5.0)
+
+
+@configclass
+class RobotFootTractionMagneticMotionSwitchFaultHardeningEnvCfg(
+    RobotFootTractionMagneticMotionSwitchBridgeEnvCfg
+):
+    """Safety-only continuation for intermittent Hall/BLE faults.
+
+    This stage deliberately remains inside the already demonstrated
+    ``mu >= 0.14`` bridge curriculum.  Its purpose is not to claim that a
+    disconnected sole can walk on arbitrarily poor ground: it makes the
+    deployed 1864-D Hall/proprio actor retain the conservative bridge gait
+    when a complete foot stream, individual channels, or delayed packets are
+    missing.  The actor still receives only Bx/By/Bz histories, packet health
+    and proprioception.  Contact force, friction and slip remain critic/reward
+    signals in Isaac only.
+
+    The raised fault rates are intentionally harsher than the normal
+    evaluation profile.  A candidate must subsequently pass the unchanged
+    nominal and default-fault zero-fall gates; training under a harsher
+    profile is not itself evidence of safety.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        # Whole-foot loss represents the independent left/right BLE streams.
+        # The remaining variation covers a failed Hall IC and a delayed packet
+        # without inventing a Hall-to-force conversion.
+        self.hall_sensor_cfg.foot_dropout_probability = 0.10
+        self.hall_sensor_cfg.dead_channel_probability = 0.08
+        self.hall_sensor_cfg.maximum_packet_delay_steps = 5
+        self.hall_sensor_cfg.observation_zero_residual_std = 0.10
+        self.hall_sensor_cfg.observation_cross_axis_std = 0.10
+        sync_hall_sensor_cfg_to_policy_terms(self.observations, self.hall_sensor_cfg)
+
+        # During safety hardening it is preferable to retain a slower but
+        # stable gait rather than trade a terminal event for a marginal
+        # high-traction tracking gain.  The later selection gate still checks
+        # high/low speed separation, so this does not silently become a
+        # stand-still solution.
+        self.rewards.termination_penalty.weight = -1400.0
+        self.rewards.traction_overspeed.weight = -10.0
+        self.rewards.high_traction_underspeed.weight = -4.0
+
+
+@configclass
+class RobotFootTractionMagneticMotionSwitchCommandEnvelopeEnvCfg(
+    RobotFootTractionMagneticMotionSwitchFaultHardeningEnvCfg
+):
+    """Final PPO stage before enabling a Hall-only speed safety governor.
+
+    The previous fault-hardening actor had only a fixed 0.7--0.9 m/s request
+    during switch training.  A runtime governor that correctly asked it to
+    crawl or stop therefore produced an out-of-distribution command and was
+    unsafe.  This stage keeps the same ``mu >= 0.14`` fault-hardening physics,
+    but learns the full stop/crawl/cruise envelope using commands independent
+    of material friction.  It preserves the exact 1864-D deploy actor schema.
+    """
+
+    commands: CommandsCfg = HallSafetyEnvelopeCommandsCfg()
+
+    def __post_init__(self):
+        super().__post_init__()
+        # RobotFootTractionMagneticMotionSwitchStudentEnvCfg writes these
+        # compatibility values during its post-init.  Keep the actual safety
+        # envelope explicit after that inherited configuration step.
+        self.commands.base_velocity.resampling_time_range = (2.5, 5.0)
+        self.commands.base_velocity.stop_fraction = 0.18
+        self.commands.base_velocity.crawl_fraction = 0.32
+        self.commands.base_velocity.crawl_speed_range = (0.20, 0.35)
+        self.commands.base_velocity.cruise_speed_range = (0.45, 0.90)
+
+        # Make falls dominate any transient tracking reward.  This does not
+        # use contact/force/mu as an actor input; it only changes the Isaac
+        # training objective and selection pressure.
+        self.rewards.termination_penalty.weight = -1800.0
+        self.rewards.flat_orientation_l2.weight = -24.0
+        self.rewards.base_angular_velocity.weight = -0.35
+
+
+@configclass
+class RobotFootTractionMagneticMotionSwitchZeroFallRecoveryEnvCfg(
+    RobotFootTractionMagneticMotionSwitchCommandEnvelopeEnvCfg
+):
+    """Targeted recovery for the measured high/low switch fall tail.
+
+    This is a safety continuation, not a claim that the training log is a
+    release test.  It replays short, asynchronous friction changes and
+    frequent 0.8 m/s-neighbourhood commands while retaining true stops/crawls
+    for the future Hall-risk speed governor.  All contact/friction/slip values
+    used by the reward stay critic/simulator-only; the actor interface remains
+    the exact 1864-D Hall/proprioception schema.
+    """
+
+    commands: CommandsCfg = HallZeroFallEnvelopeCommandsCfg()
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.commands.base_velocity.resampling_time_range = (1.75, 3.50)
+        self.commands.base_velocity.stop_fraction = 0.12
+        self.commands.base_velocity.crawl_fraction = 0.26
+        self.commands.base_velocity.crawl_speed_range = (0.20, 0.35)
+        self.commands.base_velocity.cruise_speed_range = (0.70, 0.85)
+
+        # Explicitly bias PPO against the observed rare pitch/roll tail.  The
+        # terminal term dominates a marginal command-tracking improvement,
+        # while the high-traction tracking term remains active so the policy
+        # cannot trivially solve the objective by always standing still.
+        self.rewards.termination_penalty.weight = -3000.0
+        self.rewards.flat_orientation_l2.weight = -30.0
+        self.rewards.base_height.weight = -20.0
+        self.rewards.base_angular_velocity.weight = -0.50
+        self.rewards.action_rate.weight = -0.10
+        self.rewards.high_traction_underspeed.weight = -5.0
+        self.rewards.high_traction_underspeed.params["target_speed"] = 0.80
+
+        # In the failed campaign the phase transitions were 4 s long.  More
+        # frequent, independently timed transitions prevent the actor from
+        # relying on a fixed gait clock and create many more recovery samples.
+        self.events.friction_switch.interval_range_s = (1.75, 3.50)
+
+
+@configclass
+class TractionMagneticLowGripRecoveryEventCfg(TractionMagneticSwitchTrainingEventCfg):
+    """Low-grip-only dynamics for the runtime Hall recovery action policy.
+
+    This is deliberately a separate policy-training distribution.  The
+    resulting actor is never responsible for high-traction speed tracking: a
+    Hall-only risk state machine selects it only after a causal prospective
+    slip signal has entered LOW.  Keeping the high-speed gait out of this
+    objective prevents the zero-fall recovery loss from degrading the audited
+    nominal fast-walk actor.
+
+    The low/high parameters remain present because the shared material event
+    validates both ranges, but startup/reset always choose the low interval
+    and there is no in-episode material switch.  Ground friction stays an
+    Isaac-only physics/reward quantity and is not added to the 1864-D actor
+    observation.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        for event in (self.physics_material, self.physics_material_reset):
+            event.params["low_friction_range"] = (0.14, 0.20)
+            event.params["high_friction_range"] = (0.80, 1.20)
+            event.params["initial_high_probability"] = 0.0
+            event.params["flip_existing"] = False
+
+
+@configclass
+class TractionMagneticLowGripHandoffEventCfg(
+    TractionMagneticLowGripRecoveryEventCfg
+):
+    """Low-grip recovery plus asynchronous high-momentum handoff states."""
+
+    # Isaac Lab 2.3.2's current event adds this velocity to the live root
+    # state.  Because it fires during a gait, Hall/proprio/action histories are
+    # retained, unlike a reset-only impulse.  The perturbation is training
+    # physics and never becomes an actor observation.
+    push_robot = EventTerm(
+        func=mdp.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(1.5, 3.0),
+        is_global_time=False,
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "velocity_range": {
+                "x": (0.35, 0.65),
+                "y": (-0.12, 0.12),
+                "roll": (-0.15, 0.15),
+                "pitch": (-0.30, 0.30),
+                "yaw": (-0.15, 0.15),
+            },
+        },
+    )
+
+
+@configclass
+class TractionMagneticSpatialFrictionEventCfg(TractionMagneticStudentEventCfg):
+    """Material-scale DR and privileged labels for physical floor patches."""
+
+    physics_material = EventTerm(
+        func=mdp.randomize_coherent_material_scale,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            # 0.16 * [0.875, 1.25] = the Stage7 low-mu range [0.14, 0.20].
+            # The same multiplier gives high-mu [0.7875, 1.125].
+            "scale_range": (0.875, 1.25),
+            "restitution_range": (0.0, 0.03),
+        },
+    )
+    physics_material_reset = EventTerm(
+        func=mdp.randomize_coherent_material_scale,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            "scale_range": (0.875, 1.25),
+            "restitution_range": (0.0, 0.03),
+        },
+    )
+    spatial_friction_reset = EventTerm(
+        func=mdp.update_spatial_friction_buffer,
+        mode="reset",
+        params={
+            "low_patch_mu": 0.16,
+            "high_patch_mu": 0.90,
+            "contact_force_threshold": 5.0,
+            "control_dt": 0.02,
+            "capture_target_speed": 0.24,
+            "capture_speed_tolerance": 0.05,
+            "capture_stable_time_s": 0.12,
+            "capture_deadline_s": 0.90,
+            "asset_cfg": SceneEntityCfg("robot"),
+            "left_contact_sensor_cfg": HALL_LEFT_CONTACT_CFG,
+            "right_contact_sensor_cfg": HALL_RIGHT_CONTACT_CFG,
+        },
+    )
+    spatial_friction_update = EventTerm(
+        func=mdp.update_spatial_friction_buffer,
+        mode="interval",
+        interval_range_s=(0.02, 0.02),
+        is_global_time=True,
+        params={
+            "low_patch_mu": 0.16,
+            "high_patch_mu": 0.90,
+            "contact_force_threshold": 5.0,
+            "control_dt": 0.02,
+            "capture_target_speed": 0.24,
+            "capture_speed_tolerance": 0.05,
+            "capture_stable_time_s": 0.12,
+            "capture_deadline_s": 0.90,
+            "asset_cfg": SceneEntityCfg("robot"),
+            "left_contact_sensor_cfg": HALL_LEFT_CONTACT_CFG,
+            "right_contact_sensor_cfg": HALL_RIGHT_CONTACT_CFG,
+        },
+    )
+
+
+@configclass
+class FootTractionSpatialCaptureRewardsCfg(FootTractionMotionSwitchRewardsCfg):
+    """Reward-only first-contact capture objective for the physical H-L-H course."""
+
+    spatial_capture_envelope = RewTerm(
+        func=mdp.spatial_low_capture_envelope_penalty,
+        weight=-12.0,
+        params={
+            "target_speed": 0.24,
+            "deadline_s": 0.90,
+            "tolerance": 0.03,
+            "decay_power": 1.0,
+            "excess_clip": 1.0,
+            "asset_cfg": SceneEntityCfg("robot"),
+        },
+    )
+    spatial_capture_success = RewTerm(
+        func=mdp.spatial_low_capture_reward,
+        weight=3.0,
+        params={
+            "target_speed": 0.24,
+            "speed_tolerance": 0.05,
+            "deadline_s": 0.90,
+            "progress_bonus": 0.50,
+            "hold_bonus": 1.00,
+            "timely_completion_bonus": 12.0,
+            "late_completion_bonus": 2.0,
+            "asset_cfg": SceneEntityCfg("robot"),
+        },
+    )
+
+
+@configclass
+class FootTractionCadenceStrideRewardsCfg(FootTractionSpatialCaptureRewardsCfg):
+    """Requested-speed objective with cadence and step length left unconstrained.
+
+    For walking, average forward speed is approximately cadence times step
+    length.  This reward intentionally specifies neither factor and contains no
+    LOW-stage speed cap.  PPO may therefore increase cadence while shortening
+    steps on the medium-friction patch, provided true contact-point slip,
+    impact, posture, lateral drift and action-slew costs remain acceptable.
+    """
+
+    # Symmetric command tracking: exceeding the requested velocity is not
+    # rewarded.  The identical command remains active in HIGH_START, LOW and
+    # HIGH_END, so stage identity cannot change the target.
+    track_lin_vel_xy = RewTerm(
+        func=mdp.track_lin_vel_x_exp,
+        weight=8.0,
+        params={
+            "std": 0.22,
+            "command_name": "base_velocity",
+            "asset_cfg": SceneEntityCfg("robot"),
+        },
+    )
+
+    # Contact-point velocity includes foot angular velocity and the lever arm
+    # to the actual filtered patch.  This replaces ankle-origin slip proxies.
+    contact_point_slip = RewTerm(
+        func=mdp.contact_point_tangential_slip_penalty,
+        weight=-6.0,
+        params={
+            "left_contact_sensor_cfg": HALL_LEFT_CONTACT_CFG,
+            "right_contact_sensor_cfg": HALL_RIGHT_CONTACT_CFG,
+            "asset_cfg": HALL_FOOT_ASSET_CFG,
+            "min_normal_force_n": 5.0,
+            "speed_deadband_m_s": 0.025,
+            "speed_clip_m_s": 1.5,
+            "squared": True,
+        },
+    )
+
+    # Isaac Lab exposes normal and tangential contact forces in separate
+    # buffers.  Use the dedicated, floor-filtered Hall contact sensors instead
+    # of the legacy normal-only net_forces_w approximation.
+    friction_cone_margin = RewTerm(
+        func=mdp.filtered_contact_friction_cone_margin_penalty,
+        weight=-0.55,
+        params={
+            "left_contact_sensor_cfg": HALL_LEFT_CONTACT_CFG,
+            "right_contact_sensor_cfg": HALL_RIGHT_CONTACT_CFG,
+            "safe_utilization": 0.75,
+            "force_threshold": 5.0,
+            "force_eps": 5.0,
+        },
+    )
+
+    # Directly close the long-horizon failure mode that yaw-rate and
+    # cross-track costs cannot identify: a persistent accumulated heading
+    # error after the LOW-to-HIGH handoff.  This is gait-agnostic and uses no
+    # force, contact, friction, or course-stage input.
+    straight_heading_error = RewTerm(
+        func=mdp.straight_heading_error_penalty,
+        weight=-18.0,
+        params={
+            "command_name": "base_velocity",
+            "asset_cfg": SceneEntityCfg("robot"),
+            "cmd_x_threshold": 0.10,
+            "yaw_command_threshold": 0.05,
+            "error_clip": 1.0,
+        },
+    )
+
+    # Transition-retention terms are inert at zero weight in every legacy
+    # task.  Only the isolated transition-retention environment raises them,
+    # and their stage weighting keeps HIGH_START untouched.
+    transition_heading_retention = RewTerm(
+        func=mdp.transition_heading_retention_penalty,
+        weight=0.0,
+        params={
+            "command_name": "base_velocity",
+            "cmd_x_threshold": 0.10,
+            "yaw_command_threshold": 0.05,
+            "low_weight": 1.0,
+            "high_start_weight": 0.0,
+            "high_end_peak_weight": 1.0,
+            "high_end_decay_s": 3.0,
+        },
+    )
+    transition_vy_retention = RewTerm(
+        func=mdp.transition_vy_retention_penalty,
+        weight=0.0,
+        params={
+            "command_name": "base_velocity",
+            "asset_cfg": SceneEntityCfg("robot"),
+            "cmd_x_threshold": 0.10,
+            "low_weight": 1.0,
+            "high_start_weight": 0.0,
+            "high_end_peak_weight": 1.0,
+            "high_end_decay_s": 3.0,
+            "lateral_clip": 1.5,
+        },
+    )
+    low_stage_yaw_rate = RewTerm(
+        func=mdp.low_stage_yaw_rate_penalty,
+        weight=0.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "yaw_rate_clip": 2.0,
+        },
+    )
+    low_stage_leg_symmetry = RewTerm(
+        func=mdp.low_stage_leg_symmetry_penalty,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
+    low_entry_heading_change = RewTerm(
+        func=mdp.low_entry_heading_change_penalty,
+        weight=0.0,
+        params={"error_clip": 0.5},
+    )
+    windowed_vy = RewTerm(
+        func=mdp.windowed_vy_penalty,
+        weight=0.0,
+        params={
+            "command_name": "base_velocity",
+            "asset_cfg": SceneEntityCfg("robot"),
+            "cmd_x_threshold": 0.10,
+            "window_steps": 50,
+            "lateral_clip": 1.5,
+        },
+    )
+
+@configclass
+class SpatialFrictionTerminationsCfg(TerminationsCfg):
+    """Ordinary fall terms plus successful finite-course truncation."""
+
+    course_success = DoneTerm(
+        func=mdp.spatial_friction_course_success,
+        params={
+            "minimum_local_x": 2.60,
+            "asset_cfg": SceneEntityCfg("robot"),
+        },
+        # Curriculum completion is not a physical failure.  Isaac Lab keeps
+        # timeout terms out of mdp.is_terminated and its -3500 penalty.
+        time_out=True,
+    )
+
+
+@configclass
+class RobotFootTractionMagneticMotionLowGripRecoveryEnvCfg(
+    RobotFootTractionMagneticMotionSwitchZeroFallRecoveryEnvCfg
+):
+    """Hall/proprio-only low-traction recovery policy for a two-policy guard.
+
+    The policy sees the same 1864-D deployment schema as the fast actor and
+    is trained on stop/crawl/cruise commands so a runtime governor may enter
+    it without an out-of-distribution command history.  It is intentionally
+    optimized only for ``mu in [0.14, 0.20]``; high-grip tracking remains the
+    job of the fast baseline.  This separation is a safety design choice, not
+    a hidden friction input: action selection at deployment is based only on
+    the independently validated Hall/proprio future-slip risk score.
+    """
+
+    events: EventCfg = TractionMagneticLowGripRecoveryEventCfg()
+
+    def __post_init__(self):
+        super().__post_init__()
+        # Be explicit after inherited switch-task post-init methods.  A
+        # recovery trajectory must not receive a surprise high-grip flip;
+        # high/low switching is tested at the controller integration layer.
+        self.events.friction_switch = None
+        for event in (self.events.physics_material, self.events.physics_material_reset):
+            event.params["low_friction_range"] = (0.14, 0.20)
+            event.params["high_friction_range"] = (0.80, 1.20)
+            event.params["initial_high_probability"] = 0.0
+            event.params["flip_existing"] = False
+
+        # Retain command-envelope support for the governor's crawl/stop
+        # output, while keeping enough 0.8-m/s requests for the recovery
+        # actor to learn a controlled deceleration when it takes over from
+        # the fast actor.
+        self.commands.base_velocity.resampling_time_range = (1.50, 3.00)
+        self.commands.base_velocity.stop_fraction = 0.10
+        self.commands.base_velocity.crawl_fraction = 0.30
+        self.commands.base_velocity.crawl_speed_range = (0.10, 0.30)
+        self.commands.base_velocity.cruise_speed_range = (0.70, 0.85)
+
+        # Low grip has a deliberately small forward target.  These are
+        # simulator-only rewards; the actor continues to receive only Hall
+        # Bx/By/Bz histories, packet validity/timing and proprioception.
+        for term in (
+            self.rewards.track_lin_vel_xy,
+            self.rewards.traction_overspeed,
+            self.rewards.gait,
+        ):
+            term.params["low_speed"] = 0.16
+            term.params["high_speed"] = 0.16
+        self.rewards.track_lin_vel_xy.weight = 4.50
+        self.rewards.track_lin_vel_xy.params["std"] = 0.18
+        self.rewards.traction_overspeed.weight = -18.0
+        self.rewards.gait.weight = 4.50
+        self.rewards.gait.params["slow_period"] = 1.25
+        self.rewards.gait.params["fast_period"] = 1.25
+        self.rewards.feet_slide.weight = -1.40
+        self.rewards.feet_anti_slip.weight = -1.20
+        self.rewards.slip_under_command.weight = -1.20
+        self.rewards.low_traction_touchdown_rate.weight = -16.0
+        self.rewards.termination_penalty.weight = -4000.0
+        self.rewards.flat_orientation_l2.weight = -35.0
+        self.rewards.base_height.weight = -25.0
+        self.rewards.base_angular_velocity.weight = -0.60
+        self.rewards.action_rate.weight = -0.12
+
+
+@configclass
+class RobotFootTractionMagneticMotionLowGripHandoffRecoveryEnvCfg(
+    RobotFootTractionMagneticMotionLowGripRecoveryEnvCfg
+):
+    """Stage7: capture-step recovery from a live high-speed handoff.
+
+    The low-friction material remains fixed for the whole episode.  Random
+    root-velocity increments create the missing 0.6--0.8 m/s takeover states
+    while retaining Hall, last-action and proprioceptive histories.  No
+    impulse magnitude, contact force, slip or friction label enters PolicyCfg.
+    """
+
+    events: EventCfg = TractionMagneticLowGripHandoffEventCfg()
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.events.friction_switch = None
+
+        # Align world +X with body-forward so the reset momentum has a clear
+        # physical meaning.  These values are root linear/angular velocities,
+        # not actor observations or synthetic force channels.
+        self.events.reset_base.params["pose_range"] = {
+            "x": (-0.05, 0.05),
+            "y": (-0.05, 0.05),
+            "yaw": (-0.10, 0.10),
+        }
+        self.events.reset_base.params["velocity_range"] = {
+            "x": (0.25, 0.55),
+            "y": (-0.08, 0.08),
+            "z": (0.0, 0.0),
+            "roll": (-0.12, 0.12),
+            "pitch": (-0.20, 0.20),
+            "yaw": (-0.10, 0.10),
+        }
+
+        # A fixed 1.25-s cadence and a large touchdown penalty prevented the
+        # emergency step observed in failed handoffs.  Keep weak gait shaping
+        # but let PPO discover an asynchronous capture step.
+        self.rewards.gait.weight = 1.25
+        self.rewards.low_traction_touchdown_rate.weight = -3.0
+        self.rewards.track_lin_vel_xy.weight = 4.50
+        self.rewards.traction_overspeed.weight = -24.0
+        self.rewards.feet_slide.weight = -2.0
+        self.rewards.feet_anti_slip.weight = -1.5
+        self.rewards.slip_under_command.weight = -1.5
+        self.rewards.termination_penalty.weight = -5000.0
+        self.rewards.flat_orientation_l2.weight = -40.0
+        self.rewards.base_height.weight = -28.0
+        self.rewards.base_angular_velocity.weight = -0.80
+        self.rewards.action_rate.weight = -0.09
+
+
+@configclass
+class RobotFootTractionMagneticMotionLowGripHandoffMildEnvCfg(
+    RobotFootTractionMagneticMotionLowGripHandoffRecoveryEnvCfg
+):
+    """Stage7A curriculum: moderate grip and moderate takeover momentum."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        for event in (self.events.physics_material, self.events.physics_material_reset):
+            event.params["low_friction_range"] = (0.18, 0.26)
+        self.events.reset_base.params["velocity_range"].update(
+            {
+                "x": (0.10, 0.30),
+                "y": (-0.05, 0.05),
+                "roll": (-0.08, 0.08),
+                "pitch": (-0.12, 0.12),
+                "yaw": (-0.08, 0.08),
+            }
+        )
+        self.events.push_robot.params["velocity_range"] = {
+            "x": (0.20, 0.40),
+            "y": (-0.08, 0.08),
+            "roll": (-0.10, 0.10),
+            "pitch": (-0.15, 0.15),
+            "yaw": (-0.10, 0.10),
+        }
+
+
+@configclass
+class RobotFootTractionMagneticMotionLowGripHandoffExtremeEnvCfg(
+    RobotFootTractionMagneticMotionLowGripHandoffRecoveryEnvCfg
+):
+    """Stage7C curriculum: lower-mu tail and 0.75-m/s momentum increments."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        for event in (self.events.physics_material, self.events.physics_material_reset):
+            event.params["low_friction_range"] = (0.12, 0.20)
+        self.events.reset_base.params["velocity_range"].update(
+            {
+                "x": (0.35, 0.65),
+                "y": (-0.10, 0.10),
+                "roll": (-0.16, 0.16),
+                "pitch": (-0.28, 0.28),
+                "yaw": (-0.14, 0.14),
+            }
+        )
+        self.events.push_robot.params["velocity_range"] = {
+            "x": (0.45, 0.75),
+            "y": (-0.15, 0.15),
+            "roll": (-0.20, 0.20),
+            "pitch": (-0.40, 0.40),
+            "yaw": (-0.20, 0.20),
+        }
+
+
+@configclass
+class RobotFootTractionMagneticMotionLowGripHandoffHighCommandEnvCfg(
+    RobotFootTractionMagneticMotionLowGripHandoffRecoveryEnvCfg
+):
+    """Stage7 high-command expert for a real fast-to-low-grip handoff.
+
+    Unlike the steady low-grip expert, the requested command remains 0.80 m/s
+    while the privileged low-grip reward target is 0.24 m/s.  This trains the
+    actor with the same command/history distribution it receives when the
+    frozen fast actor hands over on a real walk; friction remains physics-only.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.commands.base_velocity.resampling_time_range = (1.0e9, 1.0e9)
+        self.commands.base_velocity.stop_fraction = 0.0
+        self.commands.base_velocity.crawl_fraction = 0.0
+        self.commands.base_velocity.cruise_speed_range = (0.80, 0.80)
+        self.commands.base_velocity.high_speed_range = (0.80, 0.80)
+        for term in (
+            self.rewards.track_lin_vel_xy,
+            self.rewards.traction_overspeed,
+            self.rewards.gait,
+        ):
+            term.params["low_speed"] = 0.24
+            term.params["high_speed"] = 0.80
+        self.rewards.track_lin_vel_xy.weight = 4.5
+        self.rewards.track_lin_vel_xy.params["std"] = 0.20
+        self.rewards.traction_overspeed.weight = -24.0
+        self.rewards.gait.weight = 1.25
+        self.rewards.low_traction_touchdown_rate.weight = -3.0
+        self.rewards.feet_slide.weight = -2.0
+        self.rewards.feet_anti_slip.weight = -1.5
+        self.rewards.slip_under_command.weight = -1.5
+        self.rewards.termination_penalty.weight = -5000.0
+        self.rewards.flat_orientation_l2.weight = -40.0
+        self.rewards.base_angular_velocity.weight = -0.80
+        self.rewards.action_rate.weight = -0.09
+
+
+@configclass
+class RobotFootTractionMagneticMotionLowGripHandoffRecoveryPlayEnvCfg(
+    RobotFootTractionMagneticMotionLowGripHandoffRecoveryEnvCfg
+):
+    """Small deterministic Hall inspection task retaining handoff impulses."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 32
+        self.hall_sensor_cfg.enable_domain_randomization = False
+        sync_hall_sensor_cfg_to_policy_terms(self.observations, self.hall_sensor_cfg)
+        self.commands.base_velocity.resampling_time_range = (1.0e9, 1.0e9)
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionEnvCfg(
+    RobotFootTractionMagneticMotionSwitchStudentEnvCfg
+):
+    """Hall-only PPO on physical blue--orange--blue floor patches.
+
+    The external command remains independent of patch identity.  A leading
+    foot therefore has to contact the orange patch before Hall/proprioception
+    can causally support slowing the gait.  True material and contact values
+    are confined to physics, rewards, critic labels and evaluation.
+    """
+
+    scene: RobotSceneCfg = HallSpatialFrictionSceneCfg(
+        num_envs=4096, env_spacing=2.5
+    )
+    commands: CommandsCfg = HallZeroFallEnvelopeCommandsCfg()
+    events: EventCfg = TractionMagneticSpatialFrictionEventCfg()
+    rewards: RewardsCfg = FootTractionSpatialCaptureRewardsCfg()
+    terminations: TerminationsCfg = SpatialFrictionTerminationsCfg()
+
+    def __post_init__(self):
+        # Parent tasks need a temporary terrain config during post-init.  The
+        # scene has not been constructed yet, so removing it here prevents the
+        # old plane from ever being spawned beneath the Cuboids.
+        super().__post_init__()
+        self.scene.terrain = None
+        self.scene.height_scanner = None
+        self.curriculum.terrain_levels = None
+
+        self.events.push_robot = None
+        self.events.reset_base.params["pose_range"] = {
+            # Give the frozen/original fast gait 2--3 s to settle before the
+            # first causal low-patch contact.  The high-start patch spans
+            # x=[-2, 0], so this remains safely on its physical collider.
+            "x": (-1.70, -1.40),
+            "y": (-0.06, 0.06),
+            "yaw": (-0.06, 0.06),
+        }
+        self.events.reset_base.params["velocity_range"] = {
+            "x": (0.05, 0.20),
+            "y": (-0.03, 0.03),
+            "z": (0.0, 0.0),
+            "roll": (-0.04, 0.04),
+            "pitch": (-0.05, 0.05),
+            "yaw": (-0.04, 0.04),
+        }
+
+        # A fixed high request exposes adaptation without a hidden
+        # command-to-material shortcut.  Low-speed behavior is selected by
+        # privileged training rewards and must be inferred from Hall history.
+        self.commands.base_velocity.resampling_time_range = (1.0e9, 1.0e9)
+        self.commands.base_velocity.stop_fraction = 0.0
+        self.commands.base_velocity.crawl_fraction = 0.0
+        self.commands.base_velocity.cruise_speed_range = (0.75, 0.85)
+        self.commands.base_velocity.high_speed_range = (0.75, 0.85)
+
+        for term in (
+            self.rewards.track_lin_vel_xy,
+            self.rewards.traction_overspeed,
+            self.rewards.gait,
+        ):
+            term.params["low_speed"] = 0.16
+            term.params["high_speed"] = 0.80
+        # The first spatial run converged to a safe 0.2 m/s crawl because the
+        # survival/underspeed trade-off was too conservative.  Keep the large
+        # fall penalty, but make the requested high-friction speed materially
+        # valuable so the Hall actor cannot solve the course by simply walking
+        # slowly everywhere.
+        # Speed-recovery continuation: 6350 already passed the hardened
+        # zero-fall screen, so restore pressure toward the previously proven
+        # fast Hall gait only on HIGH patches.  LOW overspeed and termination
+        # penalties remain unchanged; the actor still has to slow safely.
+        self.rewards.track_lin_vel_xy.func = mdp.spatial_stage_track_lin_vel_x_exp
+        self.rewards.track_lin_vel_xy.weight = 8.0
+        self.rewards.track_lin_vel_xy.params = {
+            "std": 0.24,
+            "command_name": "base_velocity",
+            "low_speed": 0.24,
+            "high_speed": 0.80,
+            "asset_cfg": SceneEntityCfg("robot"),
+        }
+        self.rewards.traction_overspeed.func = mdp.spatial_stage_overspeed_penalty
+        self.rewards.traction_overspeed.weight = -20.0
+        self.rewards.traction_overspeed.params = {
+            "command_name": "base_velocity",
+            "low_speed": 0.24,
+            "high_speed": 0.80,
+            "tolerance": 0.04,
+            "asset_cfg": SceneEntityCfg("robot"),
+        }
+        self.rewards.gait.weight = 1.0
+        self.rewards.low_traction_touchdown_rate.weight = -5.0
+        self.rewards.feet_slide.weight = -1.5
+        self.rewards.feet_anti_slip.weight = -1.2
+        self.rewards.slip_under_command.weight = -1.2
+        self.rewards.termination_penalty.weight = -3500.0
+        self.rewards.flat_orientation_l2.weight = -32.0
+        self.rewards.base_angular_velocity.weight = -0.60
+        # Continuation tuning: the previous -40 coefficient caused PPO to
+        # trade away posture safety for an abrupt speed increase.  A bounded
+        # 0.60-m/s high-patch target supplies useful speed pressure while the
+        # frozen 6350 gait remains the dominant safety anchor.
+        self.rewards.high_traction_underspeed.weight = -12.0
+        self.rewards.high_traction_underspeed.params["target_speed"] = 0.60
+
+        # Capture completion never terminates the episode. The robot must still
+        # traverse FrictionHighEnd before the existing course-success timeout.
+        self._configure_spatial_capture(
+            target_speed=0.24,
+            deadline_s=0.90,
+            envelope_weight=-12.0,
+            success_weight=3.0,
+        )
+
+    def _configure_spatial_capture(
+        self,
+        target_speed: float,
+        deadline_s: float,
+        envelope_weight: float,
+        success_weight: float,
+    ) -> None:
+        """Keep event-state and reward targets identical across curriculum stages."""
+
+        for event in (
+            self.events.spatial_friction_reset,
+            self.events.spatial_friction_update,
+        ):
+            event.params["capture_target_speed"] = float(target_speed)
+            event.params["capture_deadline_s"] = float(deadline_s)
+        self.rewards.spatial_capture_envelope.weight = float(envelope_weight)
+        self.rewards.spatial_capture_envelope.params["target_speed"] = float(target_speed)
+        self.rewards.spatial_capture_envelope.params["deadline_s"] = float(deadline_s)
+        self.rewards.spatial_capture_success.weight = float(success_weight)
+        self.rewards.spatial_capture_success.params["target_speed"] = float(target_speed)
+        self.rewards.spatial_capture_success.params["deadline_s"] = float(deadline_s)
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionMildEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionEnvCfg
+):
+    """Stage-S1: preserve the 49999 fast gait across a causal mu=0.45 patch."""
+
+    scene: RobotSceneCfg = HallSpatialMildFrictionSceneCfg(
+        num_envs=4096, env_spacing=2.5
+    )
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.hall_sensor_cfg.enable_domain_randomization = True
+        self.hall_sensor_cfg.foot_dropout_probability = 0.02
+        self.hall_sensor_cfg.dead_channel_probability = 0.02
+        self.hall_sensor_cfg.maximum_packet_delay_steps = 2
+        sync_hall_sensor_cfg_to_policy_terms(
+            self.observations, self.hall_sensor_cfg
+        )
+        for event in (
+            self.events.spatial_friction_reset,
+            self.events.spatial_friction_update,
+        ):
+            event.params["low_patch_mu"] = 0.45
+            event.params["high_patch_mu"] = 0.90
+        for term in (
+            self.rewards.track_lin_vel_xy,
+            self.rewards.traction_overspeed,
+            self.rewards.gait,
+        ):
+            term.params["low_speed"] = 0.45
+            term.params["high_speed"] = 0.80
+        self.rewards.termination_penalty.weight = -5000.0
+        self.rewards.high_traction_underspeed.weight = -10.0
+        self.rewards.high_traction_underspeed.params["target_speed"] = 0.70
+        self._configure_spatial_capture(
+            target_speed=0.45,
+            deadline_s=1.00,
+            envelope_weight=-8.0,
+            success_weight=2.0,
+        )
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionMediumEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionEnvCfg
+):
+    """Stage-S2: continue the fast gait across a causal mu=0.28 patch."""
+
+    scene: RobotSceneCfg = HallSpatialMediumFrictionSceneCfg(
+        num_envs=4096, env_spacing=2.5
+    )
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.hall_sensor_cfg.enable_domain_randomization = True
+        self.hall_sensor_cfg.foot_dropout_probability = 0.05
+        self.hall_sensor_cfg.dead_channel_probability = 0.04
+        self.hall_sensor_cfg.maximum_packet_delay_steps = 4
+        sync_hall_sensor_cfg_to_policy_terms(
+            self.observations, self.hall_sensor_cfg
+        )
+        for event in (
+            self.events.spatial_friction_reset,
+            self.events.spatial_friction_update,
+        ):
+            event.params["low_patch_mu"] = 0.28
+            event.params["high_patch_mu"] = 0.90
+        for term in (
+            self.rewards.track_lin_vel_xy,
+            self.rewards.traction_overspeed,
+            self.rewards.gait,
+        ):
+            term.params["low_speed"] = 0.32
+            term.params["high_speed"] = 0.80
+        self.rewards.termination_penalty.weight = -5000.0
+        self.rewards.high_traction_underspeed.weight = -10.0
+        self.rewards.high_traction_underspeed.params["target_speed"] = 0.65
+        self._configure_spatial_capture(
+            target_speed=0.32,
+            deadline_s=0.95,
+            envelope_weight=-10.0,
+            success_weight=2.5,
+        )
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionMediumDenseEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionMediumEnvCfg
+):
+    """Training-only Medium course with de-synchronized causal transitions.
+
+    All environments still start on the physical HighStart collider and LOW
+    rewards still latch only after filtered LOW contact.  The three reset
+    distance bands prevent a 4096-environment rollout from sharing one course
+    phase.  Root x and the sampled band are privileged diagnostics, never
+    policy observations.  Fair evaluation deliberately uses the ordinary
+    Medium play cfg with its original far reset range.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.events.reset_base.func = mdp.reset_root_state_spatial_stratified
+        self.events.reset_base.params = {
+            # Far/mid/near bands are all on HighStart (which ends at x=0).
+            # The nearest reset retains >=0.45 m geometric clearance so a
+            # foot cannot begin by straddling the material boundary.
+            "x_bands": (
+                (-1.70, -1.35),
+                (-1.20, -0.85),
+                (-0.75, -0.45),
+            ),
+            "band_probabilities": (0.25, 0.40, 0.35),
+            "low_boundary_x": 0.0,
+            "minimum_high_margin": 0.30,
+            "pose_range": {
+                "y": (-0.06, 0.06),
+                "yaw": (-0.06, 0.06),
+            },
+            "velocity_range": {
+                "x": (0.05, 0.20),
+                "y": (-0.03, 0.03),
+                "z": (0.0, 0.0),
+                "roll": (-0.04, 0.04),
+                "pitch": (-0.05, 0.05),
+                "yaw": (-0.04, 0.04),
+            },
+            "asset_cfg": SceneEntityCfg("robot"),
+        }
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionPlayEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionEnvCfg
+):
+    """Four-course GUI/evaluation scene with deterministic Hall mechanics."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 4
+        self.scene.env_spacing = 6.0
+        self.hall_sensor_cfg.enable_domain_randomization = False
+        self.hall_sensor_cfg.enable_debug_vis = True
+        self.hall_sensor_cfg.debug_vis_max_envs = 4
+        sync_hall_sensor_cfg_to_policy_terms(self.observations, self.hall_sensor_cfg)
+        self.commands.base_velocity.cruise_speed_range = (0.80, 0.80)
+        for event in (self.events.physics_material, self.events.physics_material_reset):
+            event.params["scale_range"] = (1.0, 1.0)
+            event.params["restitution_range"] = (0.0, 0.0)
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionMildPlayEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionMildEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 4
+        self.scene.env_spacing = 6.0
+        self.hall_sensor_cfg.enable_domain_randomization = False
+        sync_hall_sensor_cfg_to_policy_terms(self.observations, self.hall_sensor_cfg)
+        for event in (self.events.physics_material, self.events.physics_material_reset):
+            event.params["scale_range"] = (1.0, 1.0)
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionMediumPlayEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionMediumEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 4
+        self.scene.env_spacing = 6.0
+        self.hall_sensor_cfg.enable_domain_randomization = False
+        sync_hall_sensor_cfg_to_policy_terms(self.observations, self.hall_sensor_cfg)
+        for event in (self.events.physics_material, self.events.physics_material_reset):
+            event.params["scale_range"] = (1.0, 1.0)
+
+
+@configclass
+class RobotFootTractionMagneticMotionLowGripRecoveryPlayEnvCfg(
+    RobotFootTractionMagneticMotionLowGripRecoveryEnvCfg
+):
+    """Small deterministic inspection variant for the recovery policy."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 32
+        self.hall_sensor_cfg.enable_domain_randomization = False
+        sync_hall_sensor_cfg_to_policy_terms(self.observations, self.hall_sensor_cfg)
+        self.commands.base_velocity.resampling_time_range = (1.0e9, 1.0e9)
 
 
 @configclass
@@ -3378,3 +5372,739 @@ class RobotFootTractionMagneticMotionSwitchStudentPlayEnvCfg(
     def __post_init__(self):
         super().__post_init__()
         self.scene.num_envs = 32
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionMediumDenseEnvCfg
+):
+    """Isolated Medium course that leaves cadence and stride to PPO.
+
+    The requested forward velocity stays at 0.80 m/s across the complete
+    High--Low--High traversal.  There is no material-dependent target speed,
+    fixed gait period, touchdown-count penalty, or reward for exceeding the
+    request.  Instead, PPO must trade cadence against step length while
+    respecting true contact-point slip, impact, posture, lateral-path and
+    action-slew constraints.  The 1864-D Hall/proprio actor schema is inherited
+    unchanged; contact points and material state remain privileged training
+    quantities only.
+    """
+
+    rewards: RewardsCfg = FootTractionCadenceStrideRewardsCfg()
+
+    def __post_init__(self):
+        # Keep the existing MediumDense physics, Hall randomization and
+        # de-synchronized reset bands, then remove only the old objective's
+        # prescriptive gait/speed terms.  Doing this after super() is required:
+        # the legacy spatial config initializes those terms during post-init.
+        super().__post_init__()
+
+        # This isolated task consumes the raw per-patch/point contact buffers
+        # and distributes them over the 15 Hall sites.  Legacy tasks retain the
+        # HallFootSensorCfg default (aggregate), so the A/B is explicit.
+        self.hall_sensor_cfg.contact_distribution_mode = "detailed"
+        sync_hall_sensor_cfg_to_policy_terms(
+            self.observations, self.hall_sensor_cfg
+        )
+
+        # A single material-independent request prevents command or stage from
+        # disclosing the floor.  The symmetric error below also prevents the
+        # actor from earning extra reward by running faster than requested.
+        self.commands.base_velocity.resampling_time_range = (1.0e9, 1.0e9)
+        self.commands.base_velocity.stop_fraction = 0.0
+        self.commands.base_velocity.crawl_fraction = 0.0
+        self.commands.base_velocity.cruise_speed_range = (0.80, 0.80)
+        self.commands.base_velocity.high_speed_range = (0.80, 0.80)
+        self.rewards.track_lin_vel_xy.func = mdp.track_lin_vel_x_exp
+        self.rewards.track_lin_vel_xy.weight = 8.0
+        self.rewards.track_lin_vel_xy.params = {
+            "std": 0.22,
+            "command_name": "base_velocity",
+            "asset_cfg": SceneEntityCfg("robot"),
+        }
+
+        # Remove every inherited term that imposes a LOW speed, cadence,
+        # touchdown count, or inaccurate ankle-origin slip proxy.  In
+        # particular, no 0.24/0.32 m/s target survives in this task.
+        self.rewards.traction_overspeed = None
+        self.rewards.gait = None
+        self.rewards.low_traction_touchdown_rate = None
+        self.rewards.spatial_capture_envelope = None
+        self.rewards.spatial_capture_success = None
+        self.rewards.high_traction_underspeed = None
+        self.rewards.feet_slide = None
+        self.rewards.feet_anti_slip = None
+        self.rewards.slip_under_command = None
+
+        # Safety constraints do not specify step timing.  Contact-point slip
+        # includes omega x r at the actual patch, while force-rate limits hard
+        # impacts without penalizing cadence itself.
+        self.rewards.contact_point_slip.weight = -6.0
+        self.rewards.feet_force_rate.weight = -0.012
+        self.rewards.action_rate.weight = -0.09
+        self.rewards.termination_penalty.weight = -5000.0
+        self.rewards.flat_orientation_l2.weight = -40.0
+        self.rewards.base_angular_velocity.weight = -0.75
+        self.rewards.base_height.weight = -25.0
+        self.rewards.straight_line_motion.weight = -6.0
+        self.rewards.straight_line_motion.params["yaw_rate_scale"] = 1.25
+        self.rewards.straight_cross_track.weight = -6.0
+        self.rewards.friction_cone_margin.weight = -0.55
+
+        # Capture buffers are retained only as privileged diagnostics and for
+        # the runner's LOW/HIGH auxiliary label.  Their target now matches the
+        # requested-speed retention objective and has no reward attached.
+        for event in (
+            self.events.spatial_friction_reset,
+            self.events.spatial_friction_update,
+        ):
+            event.params["capture_target_speed"] = 0.80
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionCadenceStridePlayEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideEnvCfg
+):
+    """Deterministic short-course inspection for the isolated curriculum."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 4
+        self.scene.env_spacing = 6.0
+        self.hall_sensor_cfg.enable_domain_randomization = False
+        self.hall_sensor_cfg.enable_debug_vis = True
+        self.hall_sensor_cfg.debug_vis_max_envs = 4
+        sync_hall_sensor_cfg_to_policy_terms(
+            self.observations, self.hall_sensor_cfg
+        )
+        self.events.reset_base.func = mdp.reset_root_state_spatial_stratified
+        self.events.reset_base.params["x_bands"] = ((-1.70, -1.40),)
+        self.events.reset_base.params["band_probabilities"] = (1.0,)
+        for event in (
+            self.events.physics_material,
+            self.events.physics_material_reset,
+        ):
+            event.params["scale_range"] = (1.0, 1.0)
+            event.params["restitution_range"] = (0.0, 0.0)
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideLongDemoEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionCadenceStridePlayEnvCfg
+):
+    """Wide 24 m H[-6,0]--L[0,6]--H[6,18] visualization course."""
+
+    scene: RobotSceneCfg = HallSpatialMediumLongDemoSceneCfg(
+        num_envs=4, env_spacing=12.0
+    )
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 4
+        self.scene.env_spacing = 12.0
+        # From x~-5.3 to the x=17.5 success line is about 22.8 m.  A 65 s
+        # horizon also lets a conservative 0.4 m/s gait finish, rather than
+        # turning slow-but-safe behavior into an artificial timeout.
+        self.episode_length_s = 65.0
+        self.events.reset_base.params["x_bands"] = ((-5.50, -5.10),)
+        self.events.reset_base.params["band_probabilities"] = (1.0,)
+        self.events.reset_base.params["low_boundary_x"] = 0.0
+        self.events.reset_base.params["minimum_high_margin"] = 0.30
+        self.terminations.course_success.params["minimum_local_x"] = 17.50
+        # Frame the full 24 m course by default; command-line viewer overrides
+        # remain available for recordings.
+        self.viewer.eye = (11.0, -28.0, 15.0)
+        self.viewer.lookat = (6.0, 0.0, 0.4)
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideRetentionEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideEnvCfg
+):
+    """Long-tail H--L--H training with a sustained final high-grip segment."""
+
+    scene: RobotSceneCfg = HallSpatialMediumRetentionSceneCfg(
+        num_envs=512, env_spacing=2.5
+    )
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 512
+        self.scene.env_spacing = 2.5
+        self.episode_length_s = 20.0
+        self.events.reset_base.func = mdp.reset_root_state_spatial_stratified
+        self.events.reset_base.params = {
+            "x_bands": (
+                (-2.70, -2.30),
+                (-1.85, -1.45),
+                (-1.00, -0.60),
+            ),
+            "band_probabilities": (0.35, 0.35, 0.30),
+            "low_boundary_x": 0.0,
+            "minimum_high_margin": 0.30,
+            "pose_range": {
+                "y": (-0.06, 0.06),
+                "yaw": (-0.06, 0.06),
+            },
+            "velocity_range": {
+                "x": (0.05, 0.20),
+                "y": (-0.03, 0.03),
+                "z": (0.0, 0.0),
+                "roll": (-0.04, 0.04),
+                "pitch": (-0.05, 0.05),
+                "yaw": (-0.04, 0.04),
+            },
+            "asset_cfg": SceneEntityCfg("robot"),
+        }
+        self.terminations.course_success.params["minimum_local_x"] = 9.50
+        for event in (
+            self.events.spatial_friction_reset,
+            self.events.spatial_friction_update,
+        ):
+            event.params["low_patch_mu"] = 0.28
+            event.params["high_patch_mu"] = 0.90
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideRecoveryCurriculumEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideRetentionEnvCfg
+):
+    """Retention course with dense, recoverable HIGH-stage perturbations.
+
+    The ordinary Retention play/evaluation config remains disturbance-free.
+    This isolated training distribution oversamples the heading/lateral
+    precursor states that were seen only once per long episode and therefore
+    produced no useful stability-residual gradient in the first three runs.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        # Base spatial post-init intentionally clears legacy push events.  Add
+        # this curriculum last so it exists only on the isolated training ID.
+        self.events.push_robot = EventTerm(
+            func=mdp.push_spatial_high_grip_recovery_by_velocity,
+            mode="interval",
+            interval_range_s=(1.20, 2.40),
+            is_global_time=False,
+            params={
+                "asset_cfg": SceneEntityCfg("robot"),
+                "velocity_range": {
+                    # Preserve the requested forward gait while sampling the
+                    # observed failure axes.  All values are velocity deltas.
+                    "x": (-0.06, 0.06),
+                    "y": (-0.18, 0.18),
+                    "z": (0.0, 0.0),
+                    "roll": (-0.24, 0.24),
+                    "pitch": (-0.12, 0.12),
+                    "yaw": (-0.20, 0.20),
+                },
+            },
+        )
+
+
+@configclass
+class HallSpatialTransitionRetentionSceneCfg(HallSpatialMediumRetentionSceneCfg):
+    """Wide retention course with a long final-high runout.
+
+    The legacy training patches are only 2.0 m wide; removing course-success
+    truncation let slow drifting robots walk off the side and forward edges,
+    which showed up as ~94% bad-orientation terminations.  An 8 m width gives
+    the 26 s maneuver enough lateral margin and the 18 m high-end runout keeps
+    the 5-15 s post-transition window inside the floor.
+    """
+
+    friction_high_start = _friction_patch_cfg(
+        "FrictionHighStart",
+        size_x=3.0,
+        size_y=8.0,
+        center_x=-1.5,
+        friction=0.90,
+        color=(0.05, 0.30, 0.78),
+    )
+    friction_low = _friction_patch_cfg(
+        "FrictionLow",
+        size_x=2.0,
+        size_y=8.0,
+        center_x=1.0,
+        friction=0.28,
+        color=(0.95, 0.34, 0.04),
+    )
+    friction_high_end = _friction_patch_cfg(
+        "FrictionHighEnd",
+        size_x=18.0,
+        size_y=8.0,
+        center_x=11.0,
+        friction=0.90,
+        color=(0.05, 0.30, 0.78),
+    )
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideTransitionRetentionEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideRetentionEnvCfg
+):
+    """Transition-retention course: heading injection + post-L→H convergence.
+
+    Only this isolated training distribution raises the transition heading/vy
+    terms and injects heading disturbances during LOW and early HIGH_END.  The
+    LOW cadence/stride adaptation, Hall gate and frozen fast base are all
+    retained; PPO only fits the bounded stability residual.
+    """
+
+    scene: RobotSceneCfg = HallSpatialTransitionRetentionSceneCfg(
+        num_envs=512, env_spacing=2.5
+    )
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 512
+        self.scene.env_spacing = 2.5
+        self.episode_length_s = 22.0
+        # No course-success truncation: the full 16 m final-high runout is the
+        # post-transition retention window (5-15 s at the requested speed).
+        self.terminations.course_success.params["minimum_local_x"] = 100.0
+        # Concentrate reset density on the final 1-2 s before LOW entry.
+        self.events.reset_base.params["x_bands"] = (
+            (-1.90, -1.35),
+            (-1.15, -0.75),
+            (-0.65, -0.35),
+        )
+        self.events.reset_base.params["band_probabilities"] = (0.30, 0.40, 0.30)
+        # Discrete heading steps plus small vy/yaw-rate increments, only inside
+        # LOW and the first five seconds after HIGH_END contact.
+        self.events.push_robot = EventTerm(
+            func=mdp.push_spatial_transition_heading_recovery,
+            mode="interval",
+            interval_range_s=(1.10, 2.20),
+            is_global_time=False,
+            params={
+                "asset_cfg": SceneEntityCfg("robot"),
+                "vy_range": (-0.10, 0.10),
+                "yaw_rate_range": (-0.45, 0.45),
+                "high_end_window_s": 5.0,
+            },
+        )
+        self.rewards.transition_heading_retention.weight = -24.0
+        self.rewards.transition_vy_retention.weight = -8.0
+        self.rewards.low_entry_heading_change.weight = -16.0
+        self.rewards.windowed_vy.weight = -6.0
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideTransitionRetentionPlayEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideTransitionRetentionEnvCfg
+):
+    """Nominal transition-retention rollout without the disturbance curriculum."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 16
+        self.scene.env_spacing = 4.0
+        self.events.push_robot = None
+        self.hall_sensor_cfg.enable_domain_randomization = False
+        self.hall_sensor_cfg.enable_debug_vis = False
+        sync_hall_sensor_cfg_to_policy_terms(
+            self.observations, self.hall_sensor_cfg
+        )
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideTransitionRetentionR2EnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideTransitionRetentionEnvCfg
+):
+    """Round 2: survivable disturbances, longer convergence pressure.
+
+    R1 made 96% of training episodes end in bad orientation because the
+    discrete heading steps were too strong; the policy learned survival, not
+    post-L→H convergence.  R2 uses smaller heading/velocity increments, keeps
+    the same concentrated reset distribution, and lengthens the HIGH_END
+    penalty window while raising the Δψ and windowed-vy weights.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.events.push_robot.params["vy_range"] = (-0.08, 0.08)
+        self.events.push_robot.params["yaw_rate_range"] = (-0.55, 0.55)
+        self.events.push_robot.interval_range_s = (1.50, 2.50)
+        self.rewards.transition_heading_retention.weight = -30.0
+        self.rewards.transition_heading_retention.params["high_end_decay_s"] = 6.0
+        self.rewards.transition_vy_retention.weight = -12.0
+        self.rewards.low_entry_heading_change.weight = -30.0
+        self.rewards.windowed_vy.weight = -10.0
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideTransitionRetentionR3EnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideTransitionRetentionR2EnvCfg
+):
+    """Round 3: attack the remaining LOW heading injection directly."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.rewards.low_entry_heading_change.weight = -45.0
+        self.rewards.low_stage_yaw_rate.weight = -8.0
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideTransitionRetentionR4aEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideTransitionRetentionR3EnvCfg
+):
+    """R4 ablation A: low-mu curriculum only, no symmetry penalty.
+
+    35% of environments get mu in [0.10, 0.16] and the rest [0.16, 0.28], so
+    the maneuver residual sees the full fault distribution instead of only
+    the 0.28 training point.  Every other R3 term stays unchanged.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.events.low_mu_curriculum = EventTerm(
+            func=mdp.randomize_spatial_low_patch_mu,
+            mode="startup",
+            params={
+                "extreme_mu_range": (0.10, 0.16),
+                "mild_mu_range": (0.16, 0.28),
+                "extreme_fraction": 0.35,
+            },
+        )
+        self.rewards.low_stage_leg_symmetry.weight = 0.0
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideTransitionRetentionR4bEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideTransitionRetentionR4aEnvCfg
+):
+    """R4 full: low-mu curriculum plus a small LOW-only leg symmetry cost."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.rewards.low_stage_leg_symmetry.weight = -3.0
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideTransitionRetentionR5EnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideTransitionRetentionR3EnvCfg
+):
+    """R5: rebalanced curriculum with an explicit mu=0.28 anchor.
+
+    35% of environments stay at exactly 0.28 (nominal retention), 45% sample
+    the 0.14-0.28 fault band and only 20% sample the extreme 0.10-0.14 range.
+    The ineffective leg-symmetry penalty from R4b is removed; attitude-side
+    terms stay at their R3 values.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.events.low_mu_curriculum = EventTerm(
+            func=mdp.randomize_spatial_low_patch_mu,
+            mode="startup",
+            params={
+                "extreme_mu_range": (0.10, 0.14),
+                "mild_mu_range": (0.14, 0.28),
+                "extreme_fraction": 0.20,
+                "anchor_mu": 0.28,
+                "anchor_fraction": 0.35,
+            },
+        )
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideHighEndRecoveryExpertEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideRetentionEnvCfg
+):
+    """Train a fresh high-speed recovery expert on sustained HighEnd states."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.episode_length_s = 12.0
+        self.terminations.course_success.params["minimum_local_x"] = 100.0
+        self.events.reset_base.func = mdp.reset_root_state_high_end_perturbed
+        self.events.reset_base.params = {
+            "x_range": (3.0, 7.5),
+            "pose_range": {"y": (-0.05, 0.05), "yaw": (-0.12, 0.12)},
+            # V2 is built only from training seeds 510--513.  Locked seed500
+            # is rejected by the loader even if this path is changed by hand.
+            "state_bank_path": (
+                "/home/mosense/guo/unitree_rl_lab/artifacts/hall_cadence_stride/"
+                "high_end_state_bank_train_510_513_v2.npz"
+            ),
+            "state_bank_required_role": "training_high_end_state_bank",
+            "velocity_range": {
+                "x": (0.10, 0.25),
+                "y": (-0.10, 0.10),
+                "z": (0.0, 0.0),
+                "roll": (-0.08, 0.08),
+                "pitch": (-0.06, 0.06),
+                "yaw": (-0.08, 0.08),
+            },
+            "asset_cfg": SceneEntityCfg("robot"),
+        }
+        # The V2 bank reset writes root *and* joint state atomically.  The
+        # inherited reset_robot_joints term runs later in EventManager order
+        # and would otherwise overwrite the restored walking pose with the
+        # default noisy pose while leaving all 1864-D histories unchanged.
+        self.events.reset_robot_joints = None
+        self.rewards.track_lin_vel_xy.weight = 8.0
+        self.rewards.track_lin_vel_xy.params["std"] = 0.20
+        self.rewards.straight_line_motion.weight = -18.0
+        self.rewards.straight_line_motion.params["yaw_rate_scale"] = 2.0
+        self.rewards.straight_line_motion.params["lateral_clip"] = 1.5
+        self.rewards.straight_cross_track.weight = -14.0
+        self.rewards.straight_cross_track.params["error_clip"] = 1.0
+        self.rewards.straight_heading_error.weight = -60.0
+        self.rewards.straight_heading_error.params["error_clip"] = 1.0
+        self.rewards.contact_point_slip.weight = -8.0
+        self.rewards.flat_orientation_l2.weight = -60.0
+        self.rewards.base_angular_velocity.weight = -1.20
+        self.rewards.base_height.weight = -35.0
+        self.rewards.action_rate.weight = -0.12
+        self.rewards.termination_penalty.weight = -5000.0
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideHighEndRecoveryExpertPlayEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideHighEndRecoveryExpertEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 8
+        self.scene.env_spacing = 6.0
+        self.hall_sensor_cfg.enable_domain_randomization = False
+        self.hall_sensor_cfg.enable_debug_vis = False
+        sync_hall_sensor_cfg_to_policy_terms(
+            self.observations, self.hall_sensor_cfg
+        )
+
+
+@configclass
+class RobotFootTractionMagneticMotionUniformHighFrictionLongBackboneEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideEnvCfg
+):
+    """Long-horizon 0.8 m/s backbone task with no friction transition.
+
+    This is an isolated diagnostic/retraining route for the weak original
+    high-speed gait.  The actor ABI remains Hall/proprio ``policy[1864]``;
+    friction/contact/force remain mechanics, critic and reward quantities.
+    """
+
+    scene: RobotSceneCfg = HallUniformHighFrictionLongSceneCfg(
+        num_envs=512, env_spacing=2.5
+    )
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 512
+        self.scene.env_spacing = 2.5
+        self.episode_length_s = 30.0
+
+        # There is no LOW state in this task.  Replace the spatial state event
+        # with a critic-only buffer that mirrors the real multiply-combined
+        # floor/robot material, and remove the interval state machine.
+        self.events.spatial_friction_reset.func = mdp.update_uniform_high_friction_buffer
+        self.events.spatial_friction_reset.params = {"ground_patch_mu": 0.90}
+        self.events.spatial_friction_update = None
+        self.terminations.course_success = None
+
+        # High grip remains randomized but never crosses into the low-grip
+        # domain.  This tests robust high-speed stabilization, not adaptation.
+        for event in (
+            self.events.physics_material,
+            self.events.physics_material_reset,
+        ):
+            event.params["scale_range"] = (0.95, 1.10)
+            event.params["restitution_range"] = (0.0, 0.02)
+
+        self.events.reset_base.func = mdp.reset_root_state_uniform
+        self.events.reset_base.params = {
+            "pose_range": {
+                "x": (-7.20, -6.80),
+                "y": (-0.08, 0.08),
+                "yaw": (-0.10, 0.10),
+            },
+            "velocity_range": {
+                "x": (0.08, 0.22),
+                "y": (-0.08, 0.08),
+                "z": (0.0, 0.0),
+                "roll": (-0.08, 0.08),
+                "pitch": (-0.06, 0.06),
+                "yaw": (-0.10, 0.10),
+            },
+            "asset_cfg": SceneEntityCfg("robot"),
+        }
+        # Target the observed late-failure axes without injecting an
+        # unobservable material switch.  This is a velocity increment applied
+        # to the live gait, not a command or actor input.
+        self.events.push_robot = EventTerm(
+            func=mdp.push_by_setting_velocity,
+            mode="interval",
+            interval_range_s=(3.0, 6.0),
+            is_global_time=False,
+            params={
+                "asset_cfg": SceneEntityCfg("robot"),
+                "velocity_range": {
+                    "x": (-0.04, 0.04),
+                    "y": (-0.12, 0.12),
+                    "z": (0.0, 0.0),
+                    "roll": (-0.14, 0.14),
+                    "pitch": (-0.08, 0.08),
+                    "yaw": (-0.14, 0.14),
+                },
+            },
+        )
+
+        self.commands.base_velocity.resampling_time_range = (1.0e9, 1.0e9)
+        self.commands.base_velocity.stop_fraction = 0.0
+        self.commands.base_velocity.crawl_fraction = 0.0
+        self.commands.base_velocity.cruise_speed_range = (0.80, 0.80)
+        self.commands.base_velocity.high_speed_range = (0.80, 0.80)
+
+        # Velocity reward saturates at the requested speed.  Persistent
+        # heading/lateral error, not instantaneous speed alone, dominates the
+        # late-fall objective.
+        self.rewards.track_lin_vel_xy.weight = 7.0
+        self.rewards.track_lin_vel_xy.params["std"] = 0.20
+        self.rewards.straight_heading_error.weight = -35.0
+        self.rewards.straight_heading_error.params["error_clip"] = 1.0
+        self.rewards.straight_line_motion.weight = -12.0
+        self.rewards.straight_line_motion.params["yaw_rate_scale"] = 2.0
+        self.rewards.straight_cross_track.weight = -10.0
+        self.rewards.straight_cross_track.params["error_clip"] = 1.0
+        self.rewards.flat_orientation_l2.weight = -40.0
+        self.rewards.base_angular_velocity.weight = -0.90
+        self.rewards.action_rate.weight = -0.10
+        self.rewards.contact_point_slip.weight = -4.0
+        self.rewards.friction_cone_margin.weight = -0.35
+        self.rewards.termination_penalty.weight = -5000.0
+
+
+@configclass
+class RobotFootTractionMagneticMotionUniformHighFrictionLongBackboneWarmupEnvCfg(
+    RobotFootTractionMagneticMotionUniformHighFrictionLongBackboneEnvCfg
+):
+    """H0 curriculum: learn a stable 30-s high-speed attractor first.
+
+    The full backbone task intentionally contains latency, dynamics/Hall DR
+    and targeted pushes.  Applying every stressor from the first PPO update
+    produced a policy that merely delayed late falls.  H0 removes those
+    stressors while preserving the exact 1864-D actor, 570-D critic, 0.8-m/s
+    request, 40-m floor and long-horizon stability rewards.  A checkpoint is
+    promoted to the full task only after the independent nominal evaluator
+    passes; this is a curriculum stage, never an easier acceptance test.
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.events.push_robot = None
+        for name in (
+            "add_base_mass",
+            "base_com",
+            "actuator_gains",
+            "motor_strength",
+            "joint_dynamics",
+        ):
+            setattr(self.events, name, None)
+        for event in (
+            self.events.physics_material,
+            self.events.physics_material_reset,
+        ):
+            event.params["scale_range"] = (1.0, 1.0)
+            event.params["restitution_range"] = (0.0, 0.0)
+        self.actions.JointPositionAction.min_delay = 0
+        self.actions.JointPositionAction.max_delay = 0
+        self.actions.JointPositionAction.delay_probabilities = (1.0,)
+        self.hall_sensor_cfg.enable_domain_randomization = False
+        sync_hall_sensor_cfg_to_policy_terms(
+            self.observations, self.hall_sensor_cfg
+        )
+        self.events.reset_base.params["pose_range"] = {
+            "x": (-7.10, -6.90),
+            "y": (-0.03, 0.03),
+            "yaw": (-0.03, 0.03),
+        }
+        self.events.reset_base.params["velocity_range"] = {
+            "x": (0.10, 0.20),
+            "y": (-0.03, 0.03),
+            "z": (0.0, 0.0),
+            "roll": (-0.03, 0.03),
+            "pitch": (-0.03, 0.03),
+            "yaw": (-0.03, 0.03),
+        }
+
+
+@configclass
+class RobotFootTractionMagneticMotionUniformHighFrictionLongBackbonePlayEnvCfg(
+    RobotFootTractionMagneticMotionUniformHighFrictionLongBackboneEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 16
+        self.scene.env_spacing = 4.0
+        self.hall_sensor_cfg.enable_domain_randomization = False
+        self.hall_sensor_cfg.enable_debug_vis = False
+        sync_hall_sensor_cfg_to_policy_terms(self.observations, self.hall_sensor_cfg)
+        self.events.push_robot = None
+        for name in (
+            "add_base_mass",
+            "base_com",
+            "actuator_gains",
+            "motor_strength",
+            "joint_dynamics",
+        ):
+            setattr(self.events, name, None)
+        for event in (
+            self.events.physics_material,
+            self.events.physics_material_reset,
+        ):
+            event.params["scale_range"] = (1.0, 1.0)
+            event.params["restitution_range"] = (0.0, 0.0)
+        self.actions.JointPositionAction.min_delay = 0
+        self.actions.JointPositionAction.max_delay = 0
+        self.actions.JointPositionAction.delay_probabilities = (1.0,)
+        self.viewer.eye = (7.0, -24.0, 11.0)
+        self.viewer.lookat = (7.0, 0.0, 0.5)
+
+
+@configclass
+class RobotFootTractionMagneticMotionUniformHighFrictionLongBackbone482EnvCfg(
+    RobotFootTractionMagneticMotionUniformHighFrictionLongBackboneWarmupEnvCfg
+):
+    """Nominal long-horizon retraining with the isolated 482-D actor group."""
+
+    observations: ObservationsCfg = FootTractionHighSpeedBackbone482ObservationsCfg()
+
+
+@configclass
+class RobotFootTractionMagneticMotionUniformHighFrictionLongBackbone482PlayEnvCfg(
+    RobotFootTractionMagneticMotionUniformHighFrictionLongBackbonePlayEnvCfg
+):
+    """Common nominal gate with both 1864-D Hall and 482-D high-speed groups."""
+
+    observations: ObservationsCfg = FootTractionHighSpeedBackbone482ObservationsCfg()
+
+
+@configclass
+class RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideRetentionPlayEnvCfg(
+    RobotFootTractionMagneticMotionSpatialFrictionCadenceStrideRetentionEnvCfg
+):
+    """Deterministic four-environment inspection of the retention course."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 4
+        self.scene.env_spacing = 12.0
+        self.hall_sensor_cfg.enable_domain_randomization = False
+        self.hall_sensor_cfg.enable_debug_vis = True
+        self.hall_sensor_cfg.debug_vis_max_envs = 4
+        sync_hall_sensor_cfg_to_policy_terms(
+            self.observations, self.hall_sensor_cfg
+        )
+        self.events.reset_base.params["x_bands"] = ((-2.70, -2.30),)
+        self.events.reset_base.params["band_probabilities"] = (1.0,)
+        for event in (
+            self.events.physics_material,
+            self.events.physics_material_reset,
+        ):
+            event.params["scale_range"] = (1.0, 1.0)
+            event.params["restitution_range"] = (0.0, 0.0)
+        self.viewer.eye = (10.5, -15.0, 8.5)
+        self.viewer.lookat = (3.2, 0.0, 0.35)

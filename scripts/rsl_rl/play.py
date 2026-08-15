@@ -99,6 +99,7 @@ import time
 import torch
 
 from rsl_rl.runners import OnPolicyRunner
+from rsl_rl.utils import resolve_callable
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab.envs import DirectMARLEnv, multi_agent_to_single_agent
@@ -193,14 +194,15 @@ def main():
 
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
     # load previously trained model
-    if not hasattr(agent_cfg, "class_name") or agent_cfg.class_name == "OnPolicyRunner":
-        runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
-    elif agent_cfg.class_name == "DistillationRunner":
+    if getattr(agent_cfg, "class_name", "OnPolicyRunner") == "DistillationRunner":
         from rsl_rl.runners import DistillationRunner
 
         runner = DistillationRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
     else:
-        raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
+        runner_class = resolve_callable(getattr(agent_cfg, "class_name", "OnPolicyRunner"))
+        if not isinstance(runner_class, type) or not issubclass(runner_class, OnPolicyRunner):
+            raise ValueError(f"Unsupported runner class: {agent_cfg.class_name}")
+        runner = runner_class(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
     runner.load(resume_path)
 
     # obtain the trained policy for inference

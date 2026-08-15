@@ -41,6 +41,15 @@ parser.add_argument("--task", type=str, default=None, choices=tasks, help="Name 
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy training iterations.")
 parser.add_argument(
+    "--initial_actor_std",
+    type=float,
+    default=None,
+    help=(
+        "Optional scalar Gaussian exploration std applied after any checkpoint "
+        "warm-start.  Useful for safety-first continuation; must be in (0, 1]."
+    ),
+)
+parser.add_argument(
     "--distributed", action="store_true", default=False, help="Run training with multiple GPUs or nodes."
 )
 # append RSL-RL cli arguments
@@ -49,6 +58,11 @@ cli_args.add_rsl_rl_args(parser)
 AppLauncher.add_app_launcher_args(parser)
 argcomplete.autocomplete(parser)
 args_cli, hydra_args = parser.parse_known_args()
+
+try:
+    checkpoint_load_mode = cli_args.validate_checkpoint_load_args(args_cli)
+except ValueError as error:
+    parser.error(str(error))
 
 # always enable cameras to record video
 if args_cli.video:
@@ -259,6 +273,35 @@ def _install_actor_std_guard(runner, min_std: float = 1e-3, max_std: float = 1.0
         f"(dist.update clamp + optimizer.step nan-clean, std∈[{min_std},{max_std}])"
     )
 
+
+def _set_actor_initial_std(runner, value: float) -> None:
+    """Apply an explicit safe exploration level after a checkpoint load.
+
+    A partial warm-start intentionally copies the baseline distribution
+    parameter because its shape is compatible.  That preserves historical
+    behavior, but it can be too exploratory when PPO first sees a severe
+    high→low friction transition.  This option changes exploration only; it
+    never changes the deployed deterministic actor mean or observation set.
+    """
+    import math
+    import torch
+
+    if not math.isfinite(value) or not 0.0 < value <= 1.0:
+        raise ValueError("--initial_actor_std must be finite and in (0, 1]")
+    alg = runner.alg
+    actor = getattr(alg, "actor", None) or getattr(alg, "policy", None)
+    distribution = getattr(actor, "distribution", None)
+    if distribution is None:
+        raise RuntimeError("cannot set actor exploration std: distribution unavailable")
+    with torch.no_grad():
+        if getattr(distribution, "std_param", None) is not None:
+            distribution.std_param.fill_(value)
+        elif getattr(distribution, "log_std_param", None) is not None:
+            distribution.log_std_param.fill_(math.log(value))
+        else:
+            raise RuntimeError("cannot set actor exploration std: unsupported distribution")
+    print(f"[INFO] Actor exploration std explicitly set to {value:.4f}")
+
 """Check for minimum supported RSL-RL version."""
 
 import importlib.metadata as metadata
@@ -288,9 +331,10 @@ import inspect
 import os
 import shutil
 import torch
-from datetime import datetime
+from datetime import datetime, timezone
 
 from rsl_rl.runners import OnPolicyRunner  # TODO: Consider printing the experiment name in the terminal.
+from rsl_rl.utils import resolve_callable
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab.envs import (
@@ -307,6 +351,19 @@ from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
 import unitree_rl_lab.tasks  # noqa: F401
+from unitree_rl_lab.traction.anchored_ppo import (
+    TRAINING_PROVENANCE_FORMAT,
+    TRAINING_PROVENANCE_FORMAT_VERSION,
+    actor_exploration_std_manifest,
+    canonical_json_sha256,
+    checkpoint_sha256,
+    validate_bounded_new_updates,
+    validate_fail_closed_gate_training_start,
+    validate_hall_randomization_seed,
+)
+from unitree_rl_lab.traction.layout_magnetic_student import (
+    schema_for_trailing_feature_mode,
+)
 from unitree_rl_lab.utils.export_deploy_cfg import export_deploy_cfg
 
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -345,6 +402,43 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         env_cfg.seed = seed
         agent_cfg.seed = seed
 
+    # GateBceOnly is a bounded 12-update continuation, not a fresh training
+    # task.  Reject a missing/wrong source before paying for environment
+    # construction; live counter/dimension/optimizer checks run after load.
+    require_fail_closed_start = bool(
+        getattr(agent_cfg, "require_fail_closed_training_start", False)
+    )
+    source_checkpoint_path: str | None = None
+    source_checkpoint_digest: str | None = None
+    if checkpoint_load_mode == cli_args.CHECKPOINT_LOAD_MODE_STRICT_RESUME:
+        source_checkpoint_path = str(
+            pathlib.Path(args_cli.resume_checkpoint).expanduser().resolve()
+        )
+        source_checkpoint_digest = checkpoint_sha256(source_checkpoint_path)
+    if require_fail_closed_start:
+        validate_bounded_new_updates(
+            int(agent_cfg.max_iterations),
+            int(agent_cfg.maximum_allowed_new_updates),
+        )
+        if checkpoint_load_mode != cli_args.CHECKPOINT_LOAD_MODE_STRICT_RESUME:
+            raise RuntimeError(
+                "this GateBceOnly task requires --resume_checkpoint with the "
+                "released model49 artifact"
+            )
+        if bool(getattr(args_cli, "load_optimizer", False)):
+            raise RuntimeError(
+                "GateBceOnly must start model49 with optimizer=false; remove "
+                "--load_optimizer"
+            )
+        assert source_checkpoint_path is not None
+        assert source_checkpoint_digest is not None
+        required_digest = str(agent_cfg.required_resume_checkpoint_sha256)
+        if source_checkpoint_digest != required_digest:
+            raise RuntimeError(
+                "GateBceOnly source checkpoint SHA-256 mismatch before environment "
+                f"creation: expected {required_digest}, got {source_checkpoint_digest}"
+            )
+
     # specify directory for logging experiments
     log_root_path = os.path.join("logs", "rsl_rl", agent_cfg.experiment_name)
     log_root_path = os.path.abspath(log_root_path)
@@ -365,6 +459,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         env = multi_agent_to_single_agent(env)
 
     # save resume path before creating a new log_dir
+    partial_load_stats = None
     if agent_cfg.resume or agent_cfg.algorithm.class_name == "Distillation":
         resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
 
@@ -386,8 +481,17 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # Kill NaN rewards / obs that poison advantages → std/mean NaN mid-PPO
     env = _wrap_env_nan_guard(env)
 
-    # create runner from rsl-rl
-    runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+    # Resolve the configured runner instead of silently hard-coding the stock
+    # RSL-RL implementation.  Ordinary tasks still resolve ``OnPolicyRunner``;
+    # the spatial Hall anchor task selects the project-local audited subclass.
+    runner_class = resolve_callable(agent_cfg.class_name)
+    if not isinstance(runner_class, type) or not issubclass(runner_class, OnPolicyRunner):
+        raise TypeError(
+            f"configured runner {agent_cfg.class_name!r} must derive from OnPolicyRunner"
+        )
+    runner = runner_class(
+        env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device
+    )
     # write git state to logs
     runner.add_git_repo_to_log(__file__)
     # load the checkpoint
@@ -413,12 +517,268 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         from unitree_rl_lab.utils.partial_checkpoint import load_partial_into_runner
 
         partial_path = os.path.abspath(args_cli.partial_checkpoint)
-        print(f"[INFO]: Partial warm-start from: {partial_path}")
-        load_partial_into_runner(runner, partial_path, device=agent_cfg.device, verbose=True)
+        critic_only = bool(
+            getattr(args_cli, "partial_checkpoint_critic_only", False)
+        )
+        mode = "critic-only" if critic_only else "actor+critic"
+        print(f"[INFO]: Partial warm-start from: {partial_path} ({mode})")
+        partial_load_stats = load_partial_into_runner(
+            runner,
+            partial_path,
+            device=agent_cfg.device,
+            verbose=True,
+            load_actor=not critic_only,
+            load_critic=True,
+        )
+
+    if args_cli.initial_actor_std is not None:
+        _set_actor_initial_std(runner, float(args_cli.initial_actor_std))
 
     # rsl-rl scalar std is unconstrained; grads can push it <0 or NaN → Normal.sample crash.
     # Clamp after load and after every PPO update.
     _install_actor_std_guard(runner, min_std=1e-3, max_std=1.0)
+
+    if require_fail_closed_start:
+        if source_checkpoint_path is None or source_checkpoint_digest is None:
+            raise RuntimeError("GateBceOnly checkpoint preflight state was lost")
+        start_audit = validate_fail_closed_gate_training_start(
+            runner,
+            load_mode=checkpoint_load_mode,
+            source_checkpoint_sha256=source_checkpoint_digest,
+            required_checkpoint_sha256=str(
+                agent_cfg.required_resume_checkpoint_sha256
+            ),
+            required_checkpoint_iteration=int(
+                agent_cfg.required_resume_checkpoint_iteration
+            ),
+            required_capture_gate_completed_updates=int(
+                agent_cfg.required_capture_gate_completed_updates
+            ),
+            required_actor_observation_dim=int(
+                agent_cfg.required_actor_observation_dim
+            ),
+            required_critic_observation_dim=int(
+                agent_cfg.required_critic_observation_dim
+            ),
+            required_action_dim=int(agent_cfg.required_action_dim),
+            required_gate_logit_scale=float(agent_cfg.required_gate_logit_scale),
+            required_gate_logit_bias=float(agent_cfg.required_gate_logit_bias),
+        )
+        base_env = env.unwrapped
+        hall_seed_audit = validate_hall_randomization_seed(
+            base_env,
+            int(env_cfg.seed),
+            observation_reader=runner.env.get_observations,
+        )
+        start_audit["hall_randomization_seed"] = hall_seed_audit
+        trailing_mode = str(agent_cfg.required_actor_trailing_feature_mode)
+        schema = schema_for_trailing_feature_mode(
+            trailing_mode,
+            residual_limit=float(runner.alg.actor.mlp.residual_limit),
+        ).to_dict()
+        schema_digest = canonical_json_sha256(schema)
+        start_iteration = int(start_audit["next_learning_iteration"])
+        update_count = int(agent_cfg.max_iterations)
+        expected_last_iteration = start_iteration + update_count - 1
+        expected_capture_counter = (
+            int(start_audit["capture_gate_updates_completed"]) + update_count
+        )
+        task_spec = gym.spec(args_cli.task)
+        task_kwargs = dict(task_spec.kwargs or {})
+        provenance = {
+            "format": TRAINING_PROVENANCE_FORMAT,
+            "format_version": TRAINING_PROVENANCE_FORMAT_VERSION,
+            "created_at_utc": datetime.now(timezone.utc).isoformat(),
+            "task": args_cli.task,
+            "classes": {
+                "environment_config": (
+                    f"{type(env_cfg).__module__}:{type(env_cfg).__name__}"
+                ),
+                "environment_runtime": (
+                    f"{type(base_env).__module__}:{type(base_env).__name__}"
+                ),
+                "play_environment_config_entry_point": task_kwargs.get(
+                    "play_env_cfg_entry_point"
+                ),
+                "runner": f"{type(runner).__module__}:{type(runner).__name__}",
+                "algorithm": (
+                    f"{type(runner.alg).__module__}:{type(runner.alg).__name__}"
+                ),
+                "actor": (
+                    f"{type(runner.alg.actor).__module__}:"
+                    f"{type(runner.alg.actor).__name__}"
+                ),
+                "critic": (
+                    f"{type(runner.alg.critic).__module__}:"
+                    f"{type(runner.alg.critic).__name__}"
+                ),
+            },
+            "checkpoint_load": {
+                "mode": checkpoint_load_mode,
+                "source_path": source_checkpoint_path,
+                "source_sha256": source_checkpoint_digest,
+                "strict": True,
+                "actor": True,
+                "critic": True,
+                "optimizer": False,
+                "iteration": True,
+                "source_checkpoint_iteration": start_audit[
+                    "source_checkpoint_iteration"
+                ],
+                "source_last_completed_iteration": start_audit[
+                    "source_last_completed_iteration"
+                ],
+                "next_learning_iteration": start_iteration,
+            },
+            "capture_gate": {
+                "completed_updates_at_start": start_audit[
+                    "capture_gate_updates_completed"
+                ],
+                "warmup_updates": start_audit["capture_gate_warmup_updates"],
+                "residual_learning_rate": start_audit[
+                    "capture_residual_learning_rate"
+                ],
+                "calibration": start_audit["gate_calibration"],
+            },
+            "exploration_std": {
+                "cli_override": args_cli.initial_actor_std,
+                "effective": actor_exploration_std_manifest(runner.alg.actor),
+            },
+            "randomness": {
+                "effective_seed": int(agent_cfg.seed),
+                "cli_seed": args_cli.seed,
+                "distributed": bool(args_cli.distributed),
+                "local_rank": int(getattr(app_launcher, "local_rank", 0)),
+                "global_rank": int(getattr(app_launcher, "global_rank", 0)),
+                "world_size": int(getattr(app_launcher, "world_size", 1)),
+                "hall_foot_sensor": hall_seed_audit,
+            },
+            "dimensions": start_audit["dimensions"],
+            "optimizer_roles": start_audit["optimizer_roles"],
+            "actor_schema": {
+                "version": schema["version"],
+                "trailing_feature_mode": trailing_mode,
+                "sha256": schema_digest,
+            },
+            "training_schedule": {
+                "configured_default_update_count": int(
+                    agent_cfg.default_configured_update_count
+                ),
+                "maximum_allowed_new_updates": int(
+                    agent_cfg.maximum_allowed_new_updates
+                ),
+                "requested_update_count": update_count,
+                "first_iteration": start_iteration,
+                "expected_last_completed_iteration": expected_last_iteration,
+                "expected_final_checkpoint_name": (
+                    f"model_{expected_last_iteration}.pt"
+                ),
+                "expected_final_capture_gate_updates_completed": (
+                    expected_capture_counter
+                ),
+            },
+        }
+        attach_provenance = getattr(runner, "attach_training_provenance", None)
+        if not callable(attach_provenance):
+            raise RuntimeError(
+                "GateBceOnly runner cannot embed checkpoint provenance"
+            )
+        attach_provenance(provenance)
+        print(
+            "[INFO] GateBceOnly start audit PASSED: "
+            f"model_{start_audit['source_checkpoint_iteration']} -> "
+            f"iterations {start_iteration}..{expected_last_iteration}, "
+            f"capture counter {start_audit['capture_gate_updates_completed']} -> "
+            f"{expected_capture_counter}"
+        )
+    elif source_checkpoint_path is not None and source_checkpoint_digest is not None:
+        # Ordinary audited continuation tasks also need to be self-describing.
+        # Previously only the bounded GateBceOnly experiment embedded its exact
+        # parent artifact, so a retained model could not prove which checkpoint
+        # supplied its actor/critic.  Keep this generic record deliberately
+        # small; the runner's anchor manifest owns the detailed actor semantics.
+        attach_provenance = getattr(runner, "attach_training_provenance", None)
+        load_audit = getattr(runner, "checkpoint_load_audit", None)
+        if callable(attach_provenance) and isinstance(load_audit, dict):
+            start_iteration = load_audit.get("next_learning_iteration")
+            if not isinstance(start_iteration, int):
+                raise RuntimeError(
+                    "strict-resume runner did not report the next learning iteration"
+                )
+            update_count = int(agent_cfg.max_iterations)
+            expected_last_iteration = start_iteration + update_count - 1
+            provenance = {
+                "format": TRAINING_PROVENANCE_FORMAT,
+                "format_version": TRAINING_PROVENANCE_FORMAT_VERSION,
+                "created_at_utc": datetime.now(timezone.utc).isoformat(),
+                "task": args_cli.task,
+                "classes": {
+                    "environment_config": (
+                        f"{type(env_cfg).__module__}:{type(env_cfg).__name__}"
+                    ),
+                    "environment_runtime": (
+                        f"{type(env.unwrapped).__module__}:"
+                        f"{type(env.unwrapped).__name__}"
+                    ),
+                    "runner": f"{type(runner).__module__}:{type(runner).__name__}",
+                    "algorithm": (
+                        f"{type(runner.alg).__module__}:{type(runner.alg).__name__}"
+                    ),
+                    "actor": (
+                        f"{type(runner.alg.actor).__module__}:"
+                        f"{type(runner.alg.actor).__name__}"
+                    ),
+                    "critic": (
+                        f"{type(runner.alg.critic).__module__}:"
+                        f"{type(runner.alg.critic).__name__}"
+                    ),
+                },
+                "checkpoint_load": {
+                    "mode": checkpoint_load_mode,
+                    "source_path": source_checkpoint_path,
+                    "source_sha256": source_checkpoint_digest,
+                    "strict": bool(load_audit.get("strict")),
+                    "actor": bool(load_audit.get("load_cfg", {}).get("actor")),
+                    "critic": bool(load_audit.get("load_cfg", {}).get("critic")),
+                    "optimizer": bool(
+                        load_audit.get("load_cfg", {}).get("optimizer")
+                    ),
+                    "iteration": bool(
+                        load_audit.get("load_cfg", {}).get("iteration")
+                    ),
+                    "source_checkpoint_iteration": load_audit.get(
+                        "saved_completed_iteration"
+                    ),
+                    "next_learning_iteration": start_iteration,
+                },
+                "exploration_std": {
+                    "cli_override": args_cli.initial_actor_std,
+                    "effective": actor_exploration_std_manifest(runner.alg.actor),
+                },
+                "randomness": {
+                    "effective_seed": int(agent_cfg.seed),
+                    "cli_seed": args_cli.seed,
+                    "distributed": bool(args_cli.distributed),
+                    "local_rank": int(getattr(app_launcher, "local_rank", 0)),
+                    "global_rank": int(getattr(app_launcher, "global_rank", 0)),
+                    "world_size": int(getattr(app_launcher, "world_size", 1)),
+                },
+                "training_schedule": {
+                    "requested_update_count": update_count,
+                    "first_iteration": start_iteration,
+                    "expected_last_completed_iteration": expected_last_iteration,
+                    "expected_final_checkpoint_name": (
+                        f"model_{expected_last_iteration}.pt"
+                    ),
+                },
+            }
+            attach_provenance(provenance)
+            print(
+                "[INFO] Strict-resume provenance attached: "
+                f"model_{load_audit.get('saved_completed_iteration')} -> "
+                f"iterations {start_iteration}..{expected_last_iteration}; "
+                f"source SHA-256 {source_checkpoint_digest}"
+            )
 
     # dump the configuration into log-directory
     dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)
@@ -431,7 +791,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     )
 
     # run training
-    runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
+    # A physical H-L-H course has a causal start/transition/recovery order.
+    # Random episode phases erase that order during the first rollout and
+    # over-sample terminal states, so staged spatial tasks always begin at the
+    # real reset pose.  Ordinary infinite/terrain tasks retain legacy behavior.
+    sequential_spatial_course = "SpatialFriction" in args_cli.task
+    runner.learn(
+        num_learning_iterations=agent_cfg.max_iterations,
+        init_at_random_ep_len=not sequential_spatial_course,
+    )
 
     # close the simulator
     env.close()

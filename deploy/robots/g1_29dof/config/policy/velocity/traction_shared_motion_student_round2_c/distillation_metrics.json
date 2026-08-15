@@ -1,0 +1,134 @@
+{
+  "method": "exact 1864-D Isaac offline Teacher distillation/DAgger",
+  "architecture": {
+    "external_input_dim": 1864,
+    "shared_per_foot_latent_dim": 32,
+    "fused_actor_dim": 548,
+    "output_dim": 29,
+    "shared_foot_encoder": true
+  },
+  "observation_tail": [
+    "left_valid",
+    "right_valid",
+    "body_vy",
+    "relative_heading"
+  ],
+  "motion_feedback": true,
+  "base": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_shared_motion_student/20260729_round2_stage_a_foot_encoder/shared_magnetic_policy.pt",
+  "teacher_onnx": "/home/mosense/guo/unitree_rl_lab/deploy/robots/g1_29dof/config/policy/velocity/traction_teacher_motion_balancedsym8900/exported/policy.onnx",
+  "train": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_shared_motion_student/20260729_round2_data/train_student_seed112358.npz",
+  "test": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_shared_motion_student/20260729_round2_data/test_student_seed223607.npz",
+  "augmentation": [
+    {
+      "path": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_shared_motion_student/20260729_round2_data/train_student_seed173205.npz",
+      "samples": 56399,
+      "repeat": 1
+    },
+    {
+      "path": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_shared_motion_student/20260729_round1_data/train_seed42.npz",
+      "samples": 38400,
+      "repeat": 1
+    },
+    {
+      "path": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_magnetic_motion/20260729_motion_estimator_data/train_seed271828.npz",
+      "samples": 48000,
+      "repeat": 1
+    }
+  ],
+  "training_samples": 199223,
+  "test_samples": 56430,
+  "dagger_priority": {
+    "cap": 8.0,
+    "train_mean": 1.0313016176223755,
+    "train_max": 8.0,
+    "train_prioritized_samples": 1752,
+    "test_mean": 1.0621123313903809,
+    "test_max": 8.0,
+    "test_prioritized_samples": 983
+  },
+  "epochs": 5,
+  "mirror_augmentation": false,
+  "lateral_joint_weight": 6.0,
+  "symmetry_coef": 0.0,
+  "high_mu_command_scale": 1.0,
+  "high_mu_threshold": 0.75,
+  "high_command_threshold": 0.7,
+  "high_mu_sample_weight": 4.0,
+  "teacher_mix_low": 0.02,
+  "teacher_mix_high": 0.05,
+  "teacher_mix_mean": {
+    "train": 0.02483164519071579,
+    "test": 0.02525966428220272
+  },
+  "base_action_coef": 5.0,
+  "freeze_foot_encoder": false,
+  "actor_head_only": false,
+  "foot_encoder_only": false,
+  "auxiliary_coef_scale": 0.1,
+  "mu_loss_coef": 0.05,
+  "contact_loss_coef": 0.01,
+  "force_loss_coef": 0.02,
+  "boosted_samples": {
+    "train": 36680,
+    "test": 11310
+  },
+  "target_action_clip": 4.0,
+  "before": {
+    "samples": 56430,
+    "mae": 0.0012200904311612248,
+    "rmse": 0.0026454993057996035,
+    "p95_abs": 0.003977956809103473,
+    "p95_l2": 0.022770115826278917,
+    "max_abs": 0.24355602264404297
+  },
+  "after": {
+    "samples": 56430,
+    "mae": 0.00127837632317096,
+    "rmse": 0.0023135330993682146,
+    "p95_abs": 0.0039767950773239025,
+    "p95_l2": 0.021801262255758045,
+    "max_abs": 0.18916797637939453
+  },
+  "teacher_action_metrics": {
+    "before": {
+      "samples": 56430,
+      "mae": 0.04656601697206497,
+      "rmse": 0.09204083681106567,
+      "p95_abs": 0.142951060831546,
+      "p95_l2": 0.6251175701618193,
+      "max_abs": 8.7528076171875
+    },
+    "after": {
+      "samples": 56430,
+      "mae": 0.04644902050495148,
+      "rmse": 0.0915028378367424,
+      "p95_abs": 0.14271542429924,
+      "p95_l2": 0.6237743526697154,
+      "max_abs": 8.645576477050781
+    }
+  },
+  "final_loss": 0.0014979103866678018,
+  "gates": {
+    "action_mae": {
+      "value": 0.00127837632317096,
+      "target": "<= 0.035",
+      "pass": true
+    },
+    "action_p95": {
+      "value": 0.0039767950773239025,
+      "target": "<= 0.090",
+      "pass": true
+    },
+    "improved_mae": {
+      "value": 5.828589200973511e-05,
+      "target": "< 0",
+      "pass": false
+    },
+    "finite": {
+      "value": true,
+      "target": "true",
+      "pass": true
+    }
+  },
+  "overall": "FAIL"
+}

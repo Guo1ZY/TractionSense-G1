@@ -7,6 +7,7 @@
 #include <yaml-cpp/yaml.h>
 #include <unordered_set>
 #include "isaaclab/manager/manager_term_cfg.h"
+#include "isaaclab/envs/mdp/observations/foot_bridge.h"
 #include <iostream>
 
 namespace isaaclab
@@ -38,6 +39,7 @@ public:
 
     void reset()
     {
+        foot_bridge::ScopedObservationSnapshot foot_snapshot;
         for(auto & group : group_obs_term_cfgs_)
         {
             for(auto & term : group.second)
@@ -49,6 +51,7 @@ public:
 
     std::unordered_map<std::string, std::vector<float>> compute()
     {
+        foot_bridge::ScopedObservationSnapshot foot_snapshot;
         std::unordered_map<std::string, std::vector<float>> obs_map;
         for(const auto & group : group_obs_term_cfgs_)
         {
@@ -62,6 +65,9 @@ public:
 
     const std::vector<float> compute_group(const std::string& group_name)
     {
+        // Nested scopes reuse the packet captured by compute(); direct callers
+        // still receive one fresh coherent packet for this group evaluation.
+        foot_bridge::ScopedObservationSnapshot foot_snapshot;
         std::vector<float> obs;
         auto& group_terms = group_obs_term_cfgs_.at(group_name);
 
@@ -91,9 +97,30 @@ public:
         return obs;
     }
 
+    size_t policy_observation_size() const
+    {
+        auto group = group_obs_term_cfgs_.find("obs");
+        if (group == group_obs_term_cfgs_.end()) {
+            if (group_obs_term_cfgs_.size() != 1) {
+                throw std::runtime_error(
+                    "Cannot determine a single policy observation group for "
+                    "lateral_motion_feedback preflight.");
+            }
+            group = group_obs_term_cfgs_.begin();
+        }
+        size_t size = 0;
+        for (const auto& term : group->second) {
+            size += term.size();
+        }
+        return size;
+    }
+
 protected:
     void _prapare_terms()
     {
+        // Dimension probing calls every term once. Keep those calls coherent
+        // without retaining the packet after construction completes.
+        foot_bridge::ScopedObservationSnapshot foot_snapshot;
         // check whether have multiple input
         bool only_one_input = this->cfg.begin()->second["params"].IsDefined(); // trick to check
         if(only_one_input) {

@@ -243,6 +243,80 @@ class TractionTeacherVelocityCommand(UniformLevelVelocityCommand):
             )
 
 
+class HallSafetyEnvelopeVelocityCommand(TractionTeacherVelocityCommand):
+    """Forward-only command mixture for a safety-supervised Hall actor.
+
+    Unlike :class:`TractionTeacherVelocityCommand`, this generator does *not*
+    inspect the simulator friction regime.  At every command resample it draws
+    an independent mixture of:
+
+    * a true stop command;
+    * a conservative crawl command; and
+    * a nominal cruise command.
+
+    The independence matters: otherwise the actor could exploit a command
+    distribution correlated with hidden friction instead of interpreting its
+    own Hall/proprioceptive history.  More practically, it makes the deployed
+    actor well conditioned for an external Hall-risk governor: when a packet
+    is stale or the risk probability rises, a commanded crawl/stop is still an
+    in-distribution gait rather than an untested emergency input.
+
+    Friction, contact and slip are deliberately absent from this command
+    generator.  They remain Isaac-only reward/critic quantities.
+    """
+
+    cfg: "HallSafetyEnvelopeVelocityCommandCfg"
+
+    def __init__(self, cfg: "HallSafetyEnvelopeVelocityCommandCfg", env: "ManagerBasedEnv"):
+        super().__init__(cfg, env)
+        stop = float(cfg.stop_fraction)
+        crawl = float(cfg.crawl_fraction)
+        if not (0.0 <= stop <= 1.0 and 0.0 <= crawl <= 1.0 and stop + crawl <= 1.0):
+            raise ValueError(
+                "stop_fraction and crawl_fraction must be in [0, 1] with a total no greater than 1"
+            )
+
+    def _resample_command(self, env_ids: Sequence[int]):
+        # Call the non-traction parent directly.  In particular, do not call
+        # TractionTeacherVelocityCommand._resample_command(), which would
+        # choose commands from ground_friction_regime_buf.
+        UniformLevelVelocityCommand._resample_command(self, env_ids)
+
+        env_ids_t = torch.as_tensor(env_ids, device=self.device, dtype=torch.long)
+        if env_ids_t.numel() == 0:
+            return
+
+        # The envelope is intentionally straight only.  The deployment safety
+        # governor currently controls forward speed; yaw adaptation should be
+        # trained as a separate, explicitly validated envelope.
+        self.vel_command_b[env_ids_t, :] = 0.0
+        self.is_standing_env[env_ids_t] = False
+        self.is_spin_env[env_ids_t] = False
+        self.is_high_speed_env[env_ids_t] = False
+
+        roll = torch.rand(env_ids_t.numel(), device=self.device)
+        stop = roll < float(self.cfg.stop_fraction)
+        crawl = (roll >= float(self.cfg.stop_fraction)) & (
+            roll < float(self.cfg.stop_fraction) + float(self.cfg.crawl_fraction)
+        )
+        cruise = ~(stop | crawl)
+
+        stop_ids = env_ids_t[stop]
+        crawl_ids = env_ids_t[crawl]
+        cruise_ids = env_ids_t[cruise]
+        self.is_standing_env[stop_ids] = True
+
+        if crawl_ids.numel() > 0:
+            self.vel_command_b[crawl_ids, 0] = self._uniform(
+                crawl_ids.numel(), self.cfg.crawl_speed_range, self.device
+            )
+        if cruise_ids.numel() > 0:
+            self.vel_command_b[cruise_ids, 0] = self._uniform(
+                cruise_ids.numel(), self.cfg.cruise_speed_range, self.device
+            )
+            self.is_high_speed_env[cruise_ids] = True
+
+
 @configclass
 class UniformLevelVelocityCommandCfg(UniformVelocityCommandCfg):
     """Uniform velocity command + curriculum ``limit_ranges`` + optional spin-in-place."""
@@ -292,3 +366,27 @@ class TractionTeacherVelocityCommandCfg(UniformLevelVelocityCommandCfg):
     special_stop_fraction: float = 0.40
     high_speed_regimes: tuple[int, ...] = (0, 2)
     """Friction-stratum indices that always receive high-speed requests."""
+
+
+@configclass
+class HallSafetyEnvelopeVelocityCommandCfg(TractionTeacherVelocityCommandCfg):
+    """Configuration for the friction-independent stop/crawl/cruise mixture.
+
+    ``high_speed_range`` and ``high_speed_regimes`` are retained for backward
+    compatibility with the established switch-task configuration hierarchy;
+    this command class intentionally uses ``cruise_speed_range`` instead.
+    """
+
+    class_type: type = HallSafetyEnvelopeVelocityCommand
+
+    stop_fraction: float = 0.18
+    """Probability of a zero forward-speed command at every resample."""
+
+    crawl_fraction: float = 0.32
+    """Probability of a conservative forward command (after stop samples)."""
+
+    crawl_speed_range: tuple[float, float] = (0.20, 0.35)
+    """In-distribution range used by a safety governor after elevated risk."""
+
+    cruise_speed_range: tuple[float, float] = (0.45, 0.90)
+    """Nominal forward command range.  Remaining probability is cruise."""

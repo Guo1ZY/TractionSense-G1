@@ -1,0 +1,95 @@
+{
+  "method": "exact Isaac on-policy magnetic DAgger",
+  "base": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_magnetic_speed_lateral/20260729_recovery/candidates/trust010/shared_magnetic_policy.pt",
+  "teacher_onnx": "/home/mosense/guo/unitree_rl_lab/logs/rsl_rl/unitree_g1_29dof_velocity_foot_traction_teacher_speed_lateral/2026-07-29_10-35-30_speed_lateral_prod_20260729_production/exported/policy.onnx",
+  "train": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_magnetic_speed_lateral/20260729_recovery/dagger_mujoco_fast/train.npz",
+  "test": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_magnetic_speed_lateral/20260729_recovery/dagger_mujoco_fast/test.npz",
+  "augmentation": [],
+  "training_samples": 37308,
+  "test_samples": 10212,
+  "epochs": 12,
+  "mirror_augmentation": false,
+  "lateral_joint_weight": 1.5,
+  "symmetry_coef": 0.0,
+  "high_mu_command_scale": 1.0,
+  "high_mu_threshold": 0.75,
+  "high_command_threshold": 0.7,
+  "high_mu_sample_weight": 5.0,
+  "teacher_mix_low": 0.0,
+  "teacher_mix_high": 0.3,
+  "teacher_mix_mean": {
+    "train": 0.041177909821271896,
+    "test": 0.04718244448304176
+  },
+  "base_action_coef": 2.0,
+  "freeze_foot_encoder": false,
+  "actor_head_only": false,
+  "foot_encoder_only": false,
+  "auxiliary_coef_scale": 1.0,
+  "mu_loss_coef": 0.2,
+  "contact_loss_coef": 0.01,
+  "force_loss_coef": 0.02,
+  "boosted_samples": {
+    "train": 7254,
+    "test": 2542
+  },
+  "target_action_clip": 4.0,
+  "before": {
+    "samples": 10212,
+    "mae": 0.0017777541652321815,
+    "rmse": 0.005977950058877468,
+    "p95_abs": 0.010162195563316306,
+    "p95_l2": 0.07757807858288285,
+    "max_abs": 0.1874794363975525
+  },
+  "after": {
+    "samples": 10212,
+    "mae": 0.0039037703536450863,
+    "rmse": 0.007027531508356333,
+    "p95_abs": 0.012328946217894552,
+    "p95_l2": 0.0802018612623214,
+    "max_abs": 0.1828254610300064
+  },
+  "teacher_action_metrics": {
+    "before": {
+      "samples": 10212,
+      "mae": 0.03478670492768288,
+      "rmse": 0.056576408445835114,
+      "p95_abs": 0.11559184417128558,
+      "p95_l2": 0.5036410599946975,
+      "max_abs": 0.9309521317481995
+    },
+    "after": {
+      "samples": 10212,
+      "mae": 0.034736212342977524,
+      "rmse": 0.05648735165596008,
+      "p95_abs": 0.11527650430798517,
+      "p95_l2": 0.5029764741659164,
+      "max_abs": 0.9261362552642822
+    }
+  },
+  "final_loss": 0.029134088623765354,
+  "gates": {
+    "action_mae": {
+      "value": 0.0039037703536450863,
+      "target": "<= 0.035",
+      "pass": true
+    },
+    "action_p95": {
+      "value": 0.012328946217894552,
+      "target": "<= 0.090",
+      "pass": true
+    },
+    "improved_mae": {
+      "value": 0.0021260161884129047,
+      "target": "< 0",
+      "pass": false
+    },
+    "finite": {
+      "value": true,
+      "target": "true",
+      "pass": true
+    }
+  },
+  "overall": "FAIL"
+}

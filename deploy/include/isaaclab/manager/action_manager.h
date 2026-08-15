@@ -5,7 +5,9 @@
 
 #include "isaaclab/envs/manager_based_rl_env.h"
 #include "isaaclab/manager/manager_term_cfg.h"
+#include <cmath>
 #include <numeric>
+#include <stdexcept>
 
 namespace isaaclab
 {
@@ -77,6 +79,20 @@ public:
 
     void process_action(std::vector<float> action)
     {
+        const auto expected = static_cast<size_t>(total_action_dim());
+        if (action.size() != expected) {
+            throw std::runtime_error(
+                "Policy action size mismatch before action-term slicing: expected "
+                + std::to_string(expected) + ", got "
+                + std::to_string(action.size()));
+        }
+        for (size_t index = 0; index < action.size(); ++index) {
+            if (!std::isfinite(action[index])) {
+                throw std::runtime_error(
+                    "Non-finite policy action before action-term processing at index "
+                    + std::to_string(index));
+            }
+        }
         _action = action;
         int idx = 0;
         for(auto & term : _terms)

@@ -1,4 +1,5 @@
 import numpy as np
+import math
 import os
 import yaml
 
@@ -9,14 +10,65 @@ from isaaclab.utils.string import resolve_matching_names
 
 
 def format_value(x):
-    if isinstance(x, float):
-        return float(f"{x:.3g}")
-    elif isinstance(x, list):
-        return [format_value(i) for i in x]
-    elif isinstance(x, dict):
-        return {k: format_value(v) for k, v in x.items()}
-    else:
+    """Convert a config tree to YAML-safe primitives.
+
+    Isaac Lab config dictionaries contain tuples, NumPy scalars and
+    ``slice(None)`` selectors.  ``yaml.dump`` serializes those with Python
+    object tags which yaml-cpp cannot consume and which ``yaml.safe_load``
+    deliberately rejects.  A full slice means "all indices" throughout the
+    deploy runtime and is represented by an empty sequence.  Any partial
+    slice is ambiguous without the source dimension, so fail closed instead
+    of silently treating its bounds as joint indices.
+    """
+
+    if x is None or isinstance(x, (str, bool, int)):
         return x
+    if isinstance(x, np.generic):
+        return format_value(x.item())
+    if isinstance(x, np.ndarray):
+        return format_value(x.tolist())
+    if isinstance(x, float):
+        if not math.isfinite(x):
+            raise ValueError(f"non-finite numeric value in deploy config: {x!r}")
+        return float(f"{x:.3g}")
+    if isinstance(x, slice):
+        if x == slice(None):
+            return []
+        raise ValueError(
+            "partial slice selectors cannot be exported safely without an "
+            f"explicit source dimension: {x!r}"
+        )
+    if isinstance(x, (list, tuple)):
+        return [format_value(i) for i in x]
+    if isinstance(x, dict):
+        if not all(isinstance(key, str) for key in x):
+            raise TypeError("deploy YAML mapping keys must all be strings")
+        return {k: format_value(v) for k, v in x.items()}
+    raise TypeError(f"unsupported deploy YAML value type {type(x).__name__}: {x!r}")
+
+
+def deploy_observation_name(config_name: str, func) -> str:
+    """Return the runtime observation registry name for deployment.
+
+    Isaac Lab uses the config attribute as the manager term name.  The Motion
+    Hall task deliberately retained the legacy ``foot_sensor_age_lr``
+    attribute to keep the 1864-D checkpoint column order stable, while its
+    callable now supplies ``[body_vy, relative_heading]``.  Exporting the
+    attribute name would silently make the C++ runtime feed packet age into a
+    motion checkpoint.  Resolve this one compatibility alias by callable
+    semantics and fail closed if a future alias is ambiguous.
+    """
+
+    function_name = str(getattr(func, "__name__", type(func).__name__))
+    if config_name == "foot_sensor_age_lr":
+        if function_name == "lateral_motion_feedback":
+            return "lateral_motion_feedback"
+        if function_name not in ("hall_sensor_age_lr", "magnetic_sensor_age_lr"):
+            raise ValueError(
+                "foot_sensor_age_lr has unsupported deployment callable "
+                f"{function_name!r}"
+            )
+    return config_name
 
 
 def export_deploy_cfg(env: ManagerBasedRLEnv, log_dir):
@@ -85,6 +137,9 @@ def export_deploy_cfg(env: ManagerBasedRLEnv, log_dir):
     obs_terms = zip(obs_names, obs_cfgs)
     cfg["observations"] = {}
     for obs_name, obs_cfg in obs_terms:
+        deploy_name = deploy_observation_name(obs_name, obs_cfg.func)
+        if deploy_name in cfg["observations"]:
+            raise ValueError(f"duplicate deployment observation term {deploy_name!r}")
         obs_dims = tuple(obs_cfg.func(env, **obs_cfg.params).shape)
         term_cfg = obs_cfg.copy()
         if term_cfg.scale is not None:
@@ -104,7 +159,7 @@ def export_deploy_cfg(env: ManagerBasedRLEnv, log_dir):
         term_cfg = term_cfg.to_dict()
         for _ in ["func", "modifiers", "noise", "flatten_history_dim"]:
             del term_cfg[_]
-        cfg["observations"][obs_name] = term_cfg
+        cfg["observations"][deploy_name] = term_cfg
 
     # --- save config file ---
     filename = os.path.join(log_dir, "params", "deploy.yaml")
@@ -113,5 +168,7 @@ def export_deploy_cfg(env: ManagerBasedRLEnv, log_dir):
     if not isinstance(cfg, dict):
         cfg = class_to_dict(cfg)
     cfg = format_value(cfg)
+    # ``safe_dump`` is intentional: generated deployment configs must be
+    # consumable by both yaml.safe_load and yaml-cpp without Python tags.
     with open(filename, "w") as f:
-        yaml.dump(cfg, f, default_flow_style=None, sort_keys=False)
+        yaml.safe_dump(cfg, f, default_flow_style=None, sort_keys=False)

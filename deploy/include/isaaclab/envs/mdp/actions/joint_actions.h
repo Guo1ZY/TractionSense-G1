@@ -76,17 +76,17 @@ public:
     }
 
 
-    int action_dim()
+    int action_dim() 
     {
         return _action_dim;
     }
 
-    std::vector<float> raw_actions()
+    std::vector<float> raw_actions() 
     {
         return _raw_actions;
     }
-
-    std::vector<float> processed_actions()
+    
+    std::vector<float> processed_actions() 
     {
         return _processed_actions;
     }

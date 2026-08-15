@@ -1,0 +1,19 @@
+{
+  "source_model_dir": "/home/mosense/guo/unitree_rl_lab/logs/evaluations/traction_magnetic_speed_lateral/20260729_recovery/candidates/fullfast_b",
+  "slot": "/home/mosense/guo/unitree_rl_lab/deploy/robots/g1_29dof/config/policy/velocity/traction_magnetic_recovery_fullfast_b",
+  "activated": false,
+  "observation_layout": {
+    "proprio_history": 480,
+    "magnetic_history": 1350,
+    "period_history": 30,
+    "health": 4,
+    "total": 1864
+  },
+  "onnx": {
+    "input_name": "obs",
+    "input_dim": 1864,
+    "output_name": "actions",
+    "output_dim": 29,
+    "zero_action_max_abs": 0.47183680534362793
+  }
+}
